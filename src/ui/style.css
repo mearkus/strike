@@ -82,6 +82,18 @@ h3 {
   margin: 6px 0;
 }
 
+.confirm-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #3b2a12;
+  border: 1px solid var(--gold);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
 /* ---------------- header */
 .top {
   display: flex;

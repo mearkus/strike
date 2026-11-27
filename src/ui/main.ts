@@ -1,6 +1,5 @@
 import './style.css';
 import { chooseAction } from '../ai/ai';
-import { card } from '../engine/cards';
 import { IllegalAction, applyAction, battingTeam, newGame, pitchingTeam, score, verb, waitingOn } from '../engine/game';
 import { Rng, randomSeed } from '../engine/rng';
 import type { Action, DeckName, Difficulty, GameState, PlayerId } from '../engine/types';
@@ -41,6 +40,8 @@ interface Ui {
   animatedKey: number;
   aiTimer: ReturnType<typeof setTimeout> | null;
   error: string | null;
+  /** Showing the "abandon this game?" bar. */
+  confirmQuit: boolean;
 }
 
 const SAVE_KEY = 'strike.save.v1';
@@ -58,6 +59,7 @@ const ui: Ui = {
   animatedKey: 0,
   aiTimer: null,
   error: null,
+  confirmQuit: false,
 };
 const aiRng = new Rng(randomSeed());
 const root = document.getElementById('app')!;
@@ -190,6 +192,11 @@ function render(): void {
     </div>
   </header>
   ${ui.error ? `<div class="error">${esc(ui.error)}</div>` : ''}
+  ${
+    ui.confirmQuit
+      ? `<div class="confirm-bar">Abandon this game? <button class="primary" data-act="quitYes">Yes, new game</button><button data-act="quitNo">Keep playing</button></div>`
+      : ''
+  }
   ${scoreboardHtml(g)}
   <div class="board">
     <div class="col left">
@@ -349,9 +356,21 @@ function handle(actName: string, el: HTMLElement | null): void {
       return step();
     }
     case 'quit':
-      if (g && g.phase !== 'gameOver' && !confirm('Abandon this game?')) return;
+      if (g && g.phase !== 'gameOver') {
+        ui.confirmQuit = true;
+        return render();
+      }
       ui.game = null;
       save();
+      return render();
+    case 'quitYes':
+      if (ui.aiTimer) clearTimeout(ui.aiTimer);
+      ui.confirmQuit = false;
+      ui.game = null;
+      save();
+      return render();
+    case 'quitNo':
+      ui.confirmQuit = false;
       return render();
     case 'rematch':
       return startGame();
@@ -391,12 +410,9 @@ function handle(actName: string, el: HTMLElement | null): void {
     case 'buy':
       act({ type: 'buy', player: v, marketIndex: Number(el!.dataset.i) });
       break;
-    case 'release': {
-      const id = el!.dataset.id!;
-      if (!confirm(`Release ${card(id).name} for 1★?`)) return;
-      act({ type: 'release', player: v, deck: ui.releaseDeck, cardId: id });
+    case 'release':
+      act({ type: 'release', player: v, deck: ui.releaseDeck, cardId: el!.dataset.id! });
       break;
-    }
     case 'endShop':
       act({ type: 'endShop', player: v });
       break;
