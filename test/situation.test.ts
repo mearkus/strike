@@ -1,0 +1,115 @@
+import { describe, expect, it } from 'vitest';
+import { advance, BALLS_FOR_WALK, freshSituation } from '../src/engine/situation';
+import type { Bases, PitchOutcome, Situation } from '../src/engine/types';
+
+const sit = (bases: Bases, outs = 0, balls = 0, strikes = 0): Situation => ({ bases, outs, balls, strikes });
+const play = (hit: Extract<PitchOutcome, { kind: 'inPlay' }>['hit'], hitAndRun = false): PitchOutcome =>
+  hitAndRun ? { kind: 'inPlay', hit, hitAndRun } : { kind: 'inPlay', hit };
+
+describe('count', () => {
+  it('walks on ball three-ish and forces runners', () => {
+    const r = advance(sit([true, true, true], 1, BALLS_FOR_WALK - 1), { kind: 'ball' });
+    expect(r.result).toBe('walk');
+    expect(r.runs).toBe(1);
+    expect(r.sit.bases).toEqual([true, true, true]);
+    expect(r.sit.balls).toBe(0);
+  });
+
+  it('does not force a runner who is not forced', () => {
+    const r = advance(sit([false, false, true], 0, BALLS_FOR_WALK - 1), { kind: 'ball' });
+    expect(r.runs).toBe(0);
+    expect(r.sit.bases).toEqual([true, false, true]);
+  });
+
+  it('strikes out on strike three', () => {
+    const r = advance(sit([false, false, false], 0, 1, 2), { kind: 'swingingStrike' });
+    expect(r.result).toBe('strikeout');
+    expect(r.sit.outs).toBe(1);
+    expect(r.atBatOver).toBe(true);
+  });
+
+  it('two-strike fouls do not add a strike, but foul bunts do', () => {
+    expect(advance(sit([false, false, false], 0, 0, 2), { kind: 'foul' }).sit.strikes).toBe(2);
+    expect(advance(sit([false, false, false], 0, 0, 2), { kind: 'buntFoul' }).result).toBe('strikeout');
+  });
+
+  it('third out ends the inning and clears the bases', () => {
+    const r = advance(sit([true, true, false], 2, 0, 2), { kind: 'calledStrike' });
+    expect(r.inningOver).toBe(true);
+    expect(r.sit.bases).toEqual([false, false, false]);
+  });
+});
+
+describe('balls in play', () => {
+  it('single scores runners from second and third, runner on first to second', () => {
+    const r = advance(sit([true, true, true]), play('single'));
+    expect(r.runs).toBe(2);
+    expect(r.sit.bases).toEqual([true, true, false]);
+  });
+
+  it('hit and run sends the runner from first to third on a single', () => {
+    const r = advance(sit([true, false, false]), play('single', true));
+    expect(r.sit.bases).toEqual([true, false, true]);
+  });
+
+  it('double: runner on first to third', () => {
+    const r = advance(sit([true, true, false]), play('double'));
+    expect(r.runs).toBe(1);
+    expect(r.sit.bases).toEqual([false, true, true]);
+  });
+
+  it('grand slam', () => {
+    const r = advance(sit([true, true, true]), play('homeRun'));
+    expect(r.runs).toBe(4);
+    expect(r.sit.bases).toEqual([false, false, false]);
+  });
+
+  it('sacrifice fly scores the runner on third with less than two outs', () => {
+    const r = advance(sit([false, false, true], 1), play('flyout'));
+    expect(r.result).toBe('sacFly');
+    expect(r.runs).toBe(1);
+  });
+
+  it('no run scores on a fly ball for the third out', () => {
+    const r = advance(sit([false, false, true], 2), play('flyout'));
+    expect(r.runs).toBe(0);
+    expect(r.inningOver).toBe(true);
+  });
+
+  it('double play removes the runner on first and the batter', () => {
+    const r = advance(sit([true, false, true], 0), play('doublePlay'));
+    expect(r.sit.outs).toBe(2);
+    expect(r.runs).toBe(1);
+    expect(r.sit.bases).toEqual([false, false, false]);
+  });
+
+  it('sacrifice bunt moves everyone up', () => {
+    const r = advance(sit([true, true, false], 0), { kind: 'sacrifice' });
+    expect(r.sit.outs).toBe(1);
+    expect(r.sit.bases).toEqual([false, true, true]);
+  });
+});
+
+describe('steals', () => {
+  it('a safe steal moves the lead runner and the count still applies', () => {
+    const r = advance(sit([true, false, false], 0, 0, 0), { kind: 'calledStrike', steal: 'safe' });
+    expect(r.sit.bases).toEqual([false, true, false]);
+    expect(r.sit.strikes).toBe(1);
+    expect(r.steal).toEqual({ result: 'safe', to: 2 });
+  });
+
+  it('a double steal moves both runners', () => {
+    const r = advance(sit([true, true, false]), { kind: 'ball', steal: 'safe' });
+    expect(r.sit.bases).toEqual([false, true, true]);
+  });
+
+  it('caught stealing for the third out ends the inning without finishing the at-bat', () => {
+    const r = advance(sit([true, false, false], 2, 1, 1), { kind: 'ball', steal: 'caught' });
+    expect(r.inningOver).toBe(true);
+    expect(r.batterDone).toBe(false);
+  });
+
+  it('fresh situation is empty', () => {
+    expect(freshSituation()).toEqual(sit([false, false, false]));
+  });
+});
