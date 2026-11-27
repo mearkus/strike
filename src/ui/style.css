@@ -1,0 +1,813 @@
+:root {
+  --bg: #0f2a1d;
+  --bg2: #143826;
+  --panel: #1a4430;
+  --chalk: #f4f1e8;
+  --muted: #a9c3b4;
+  --paper: #fbf7ec;
+  --ink: #1d2320;
+  --gold: #f2c14e;
+  --heat: #e4572e;
+  --curve: #3a86ff;
+  --change: #2a9d8f;
+  --knuckle: #9b5de5;
+  --any: #7a8a83;
+  --tactic: #c08b2c;
+  --good: #57cc99;
+  --bad: #ef6f6c;
+  --radius: 10px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--chalk);
+  background: radial-gradient(ellipse at top, #1d4d35, var(--bg) 60%);
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+#app {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 12px 16px 40px;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid #5f8f76;
+  background: #23563e;
+  color: var(--chalk);
+  padding: 8px 14px;
+}
+button:hover:not(:disabled) {
+  background: #2c6a4c;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.primary {
+  background: var(--gold);
+  color: #2b2100;
+  border-color: #d9a72d;
+  font-weight: 700;
+}
+button.primary:hover:not(:disabled) {
+  background: #ffd36b;
+}
+button.wide {
+  width: 100%;
+  margin-bottom: 16px;
+}
+h2,
+h3 {
+  margin: 0 0 8px;
+}
+h3 {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.error {
+  background: var(--bad);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin: 6px 0;
+}
+
+.confirm-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #3b2a12;
+  border: 1px solid var(--gold);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+/* ---------------- header */
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.top .actions {
+  display: flex;
+  gap: 8px;
+}
+.logo {
+  font-weight: 900;
+  font-size: 1.6rem;
+  letter-spacing: 0.18em;
+  color: var(--chalk);
+  text-shadow: 0 2px 0 #0008;
+}
+.logo span {
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+.logo.big {
+  font-size: 3.2rem;
+  text-align: center;
+}
+
+/* ---------------- setup */
+.setup {
+  max-width: 620px;
+  margin: 6vh auto 0;
+}
+.tag {
+  text-align: center;
+  color: var(--muted);
+  margin: 4px 0 24px;
+}
+.setup-form {
+  background: var(--panel);
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid #2d6a4c;
+}
+.setup-form fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.setup-form legend {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.setup-form .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.setup-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+.setup-form fieldset label {
+  flex-direction: row;
+  align-items: center;
+  font-size: 1rem;
+}
+select,
+input:not([type='radio']) {
+  font: inherit;
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid #5f8f76;
+  background: #0f2a1d;
+  color: var(--chalk);
+}
+
+/* ---------------- scoreboard */
+.scoreboard {
+  width: 100%;
+  border-collapse: collapse;
+  background: #0b1a12;
+  border: 3px solid #2d5a43;
+  border-radius: var(--radius);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.scoreboard th,
+.scoreboard td {
+  padding: 6px 8px;
+  text-align: center;
+  border-right: 1px solid #1f3b2c;
+}
+.scoreboard thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.scoreboard td {
+  color: var(--gold);
+  font-size: 1.1rem;
+  min-width: 30px;
+}
+.scoreboard td.live {
+  background: #22402f;
+}
+.scoreboard td.r {
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.25rem;
+}
+.scoreboard td.stars {
+  color: var(--gold);
+}
+.scoreboard th.team {
+  text-align: left;
+  color: var(--chalk);
+  font-family: system-ui, sans-serif;
+  white-space: nowrap;
+  width: 30%;
+}
+.scoreboard th.team small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.bat-dot {
+  color: var(--gold);
+  margin-right: 6px;
+  font-size: 0.8rem;
+}
+
+/* ---------------- board layout */
+.board {
+  display: grid;
+  grid-template-columns: 270px 1fr 300px;
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 1050px) {
+  /* Single column: bases and count, then your hand, then scouting and the log. */
+  .board {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .col.left {
+    display: contents;
+  }
+  .field {
+    order: 0;
+  }
+  .col.center {
+    order: 1;
+  }
+  .scouting {
+    order: 2;
+  }
+  .roles {
+    order: 3;
+  }
+  .col.right {
+    order: 4;
+  }
+  .col.right .log {
+    max-height: 220px;
+  }
+  .reveal.empty {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .logo {
+    font-size: 1.2rem;
+  }
+  .top .actions button {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+  .card {
+    width: calc(50% - 6px);
+    min-height: 160px;
+  }
+  .duel .card.small {
+    width: 118px;
+  }
+  .setup-form .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.panel {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 12px;
+  border: 1px solid #2d6a4c;
+}
+
+/* ---------------- field */
+.field {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 10px;
+  border: 1px solid #2d6a4c;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.diamond {
+  width: 130px;
+  flex-shrink: 0;
+}
+.diamond .infield {
+  fill: #b3814f;
+  stroke: #e9dfc8;
+  stroke-width: 2;
+  opacity: 0.85;
+}
+.diamond .base {
+  fill: #f4f1e8;
+  stroke: #333;
+  stroke-width: 1;
+  transition: fill 0.3s;
+}
+.diamond .base.on {
+  fill: var(--gold);
+  stroke: #fff;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px #f2c14e);
+}
+.diamond .plate {
+  fill: #fff;
+}
+.situation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inning {
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+.count-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.count-row .lbl {
+  width: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid #567;
+  display: inline-block;
+}
+.dot.ball.on {
+  background: var(--good);
+  border-color: var(--good);
+}
+.dot.strike.on {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.dot.out.on {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+.seen {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+/* ---------------- tags */
+.mini {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--any);
+  color: #fff;
+  white-space: nowrap;
+}
+.mini.t-heat {
+  background: var(--heat);
+}
+.mini.t-curve {
+  background: var(--curve);
+}
+.mini.t-change {
+  background: var(--change);
+}
+.mini.t-knuckle {
+  background: var(--knuckle);
+}
+.mini.t-tactic {
+  background: var(--tactic);
+}
+.bars {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.mini.zone {
+  background: transparent;
+  border: 2px solid var(--chalk);
+}
+.mini.zone.z-edge {
+  border-style: dashed;
+}
+.mini.zone.z-chase {
+  border-style: dotted;
+  color: var(--muted);
+}
+.roles div {
+  margin: 3px 0;
+}
+
+/* ---------------- cards */
+.card {
+  width: 148px;
+  min-height: 190px;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 10px;
+  border: 3px solid var(--any);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 10px #0007;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.card.small {
+  width: 124px;
+  min-height: 150px;
+  font-size: 0.9em;
+}
+.card .card-head {
+  background: var(--any);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  display: flex;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.card .cost {
+  background: #0004;
+  padding: 0 5px;
+  border-radius: 6px;
+}
+.card .card-name {
+  font-weight: 800;
+  font-size: 0.98rem;
+  padding: 6px 7px 2px;
+  line-height: 1.15;
+}
+.card .card-stats {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 2px 7px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.card .card-stats span {
+  background: #0000000f;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.card .card-stats .zone {
+  border: 2px solid var(--ink);
+  background: transparent;
+}
+.card .card-stats .zone.z-edge {
+  border-style: dashed;
+}
+.card .card-stats .zone.z-chase {
+  border-style: dotted;
+}
+.card .card-text {
+  font-size: 0.72rem;
+  padding: 4px 7px 7px;
+  color: #3c4440;
+  line-height: 1.3;
+  flex: 1;
+}
+.card .card-foot {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #0000000d;
+  padding: 4px 7px;
+  text-align: center;
+}
+.card.t-heat {
+  border-color: var(--heat);
+}
+.card.t-heat .card-head {
+  background: var(--heat);
+}
+.card.t-curve {
+  border-color: var(--curve);
+}
+.card.t-curve .card-head {
+  background: var(--curve);
+}
+.card.t-change {
+  border-color: var(--change);
+}
+.card.t-change .card-head {
+  background: var(--change);
+}
+.card.t-knuckle {
+  border-color: var(--knuckle);
+}
+.card.t-knuckle .card-head {
+  background: var(--knuckle);
+}
+.card.t-tactic {
+  border-color: var(--tactic);
+}
+.card.t-tactic .card-head {
+  background: var(--tactic);
+}
+.card.swing::after,
+.card.tactic::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, #c33 0 6px, transparent 6px 12px);
+  opacity: 0.5;
+}
+.card.selectable {
+  cursor: pointer;
+}
+.card.selectable:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 10px 18px #0009;
+}
+.card.selected {
+  transform: translateY(-12px);
+  box-shadow:
+    0 0 0 3px var(--gold),
+    0 12px 22px #000a;
+}
+.card.disabled {
+  opacity: 0.5;
+  filter: grayscale(0.4);
+}
+.card.blank {
+  border-style: dashed;
+  border-color: #889;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ---------------- reveal */
+.reveal {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 12px;
+  border: 1px solid #2d6a4c;
+}
+.reveal.animate {
+  animation: pop 0.45s ease-out;
+}
+.reveal.empty {
+  color: var(--muted);
+  text-align: center;
+  animation: none;
+}
+.duel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.duel .side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.duel .who {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.reveal.animate .duel .side .card {
+  animation: flip 0.5s ease-out both;
+}
+.reveal.animate .duel .side:last-child .card {
+  animation-delay: 0.12s;
+}
+.vs {
+  font-weight: 900;
+  color: var(--gold);
+  font-size: 1.3rem;
+}
+.result {
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin-top: 10px;
+}
+.reveal.animate .result {
+  animation: pop 0.6s 0.35s ease-out both;
+}
+.result.good {
+  color: var(--good);
+}
+.result.runs {
+  color: var(--gold);
+  font-size: 1.35rem;
+}
+.result.bad {
+  color: var(--bad);
+}
+@keyframes flip {
+  from {
+    transform: rotateY(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0);
+    opacity: 1;
+  }
+}
+@keyframes pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---------------- hand */
+.hand-area {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 12px;
+  border: 1px solid #2d6a4c;
+}
+.hand-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hand {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px 2px 8px;
+  min-height: 200px;
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.waiting {
+  text-align: center;
+  color: var(--muted);
+  padding: 30px 0;
+  font-style: italic;
+}
+
+/* ---------------- pass screen / game over */
+.pass {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 30px;
+  border: 1px solid #2d6a4c;
+  text-align: center;
+}
+.pass .controls {
+  justify-content: center;
+}
+.gameover h2 {
+  font-size: 2rem;
+  color: var(--gold);
+}
+.final {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+/* ---------------- shop */
+.shop {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 14px;
+  border: 1px solid #2d6a4c;
+}
+.shop-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: space-between;
+}
+.stars-big {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--gold);
+}
+.market,
+.deck-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 16px;
+}
+.tabs {
+  display: flex;
+  gap: 6px;
+}
+.tabs button.on {
+  background: var(--gold);
+  color: #2b2100;
+}
+
+/* ---------------- log */
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 560px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+}
+.log li {
+  padding: 5px 0;
+  border-bottom: 1px solid #ffffff12;
+  line-height: 1.35;
+}
+.log li.scored {
+  color: var(--gold);
+  font-weight: 600;
+}
+.log .inn {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  margin-right: 4px;
+}
+
+/* ---------------- rules modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: #000b;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 12px;
+  overflow-y: auto;
+  z-index: 10;
+}
+.modal-body {
+  background: var(--paper);
+  color: var(--ink);
+  max-width: 760px;
+  border-radius: 12px;
+  padding: 22px 26px;
+}
+.rules h3 {
+  margin-top: 16px;
+  font-size: 1.05rem;
+}
+.rules ul {
+  padding-left: 20px;
+  line-height: 1.5;
+}
+.rules p {
+  line-height: 1.5;
+}
+.tri {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.tri td,
+.tri th {
+  padding: 4px 12px;
+  border-bottom: 1px solid #0002;
+  text-align: left;
+}
