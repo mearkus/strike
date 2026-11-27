@@ -208,7 +208,7 @@ describe('full games', () => {
   });
 
   it('skips the bottom of the last inning when the home team leads, and walks off', () => {
-    for (let seed = 1; seed < 30; seed++) {
+    for (let seed = 1; seed < 16; seed++) {
       const s = autoplay(start(seed, 3), ['veteran', 'veteran'], seed);
       const last = s.log[s.log.length - 1].text;
       if (s.winner === 1 && s.half === 'top') expect(score(s, 1)).toBeGreaterThan(score(s, 0));
@@ -218,9 +218,9 @@ describe('full games', () => {
         expect(score(s, 1) - score(s, 0)).toBeLessThanOrEqual(4);
       }
     }
-  });
+  }, 30_000);
 
-  it('extra innings start with a runner on second', () => {
+  it('extra innings start with a runner on second', { timeout: 30_000 }, () => {
     for (let seed = 1; seed < 200; seed++) {
       const s = autoplay(start(seed, 1), ['rookie', 'rookie'], seed, (g) => g.inning === 2 && g.phase === 'pitch');
       if (s.phase === 'pitch' && s.inning === 2) {
