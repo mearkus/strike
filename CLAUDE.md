@@ -15,6 +15,8 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
 - Balance sim: `npm run sim` (`--games N --innings N --only <difficulty> --calibrate`)
 
 ## Conventions
+- All work goes through pull requests: branch off `main`, push the branch, open a PR.
+  Never push directly to `main`.
 - Keep changes small and focused; one concern per PR.
 - Write or update tests alongside behavior changes.
 - Don't commit secrets. Use environment variables, documented in README.md.
