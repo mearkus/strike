@@ -28,13 +28,15 @@ npm run sim        # AI-vs-AI round robin with league stats (balance tuning)
 
 | | |
 |---|---|
-| **Pitch cards** | Type (Heat / Breaking / Offspeed), zone (Strike / Edge / Chase) and stuff. |
+| **Pitch cards** | Type (Heat / Breaking / Offspeed), zone (Strike / Edge / Chase), stuff and control. |
+| **Command** | Every pitch rolls a d6 against its control. A miss drifts one zone wider: Strike → Edge → Chase → in the dirt (always a ball, can be a wild pitch). |
 | **Swing cards** | Sit on a pitch type, plus contact and power. Tactics: Steal, Bunt, Good Eye. |
 | **Read triangle** | Sit on the right type: +3 contact. Get fooled: −2. Sit Heat is fooled by Offspeed, Sit Breaking by Heat, Sit Offspeed by Breaking. |
 | **Take or swing** | Taken strikes are strikes, taken chases are balls, the edge is a coin flip. Chasing hurts contact but you may check your swing. |
-| **Count** | 3 balls walk, 3 strikes out, two-strike fouls don't count. |
+| **Count** | 4 balls walk, 3 strikes out, two-strike fouls don't count. |
 | **Bases** | Singles score runners from 2nd; doubles score all but the runner from 1st; sac flies, double plays, steals, bunts and hit-and-runs are all in. Extra innings start with a runner on 2nd. |
-| **Deck-building** | Earn stars for hits, runs, walks, steals, outs and strikeouts. After every half-inning, both sides sign cards from a shared market or release one. Pitchers add a *Tired Arm* card for every half-inning they pitch. |
+| **Deck-building** | Earn stars for hits, runs, walks, steals, outs and strikeouts. After every half-inning, both sides sign cards from a shared market or release one. |
+| **Fatigue** | *Tired Arm* cards are flat, wild and hittable. You gain one per half-inning pitched. **Max effort** gives any pitch +2 stuff but shuffles a Tired Arm into your draw pile, a push-your-luck choice in the spirit of the board game *Heat*. **Easy** pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand. |
 
 The in-game **How to play** button has the full rules.
 
@@ -44,7 +46,8 @@ The in-game **How to play** button has the full rules.
 - **Sinkers** cause double plays; **Hit & Run** prevents them.
 - **Deceptive** chase pitches (Sweeper, Splitter) allow no check swing; **Good Eye** pays off against chase-heavy pitchers.
 - **Tunnel Change** gets nastier after Heat; **Timed Up** punishes a pitcher who repeats a type.
-- **Knuckleball** can't be sat on; **Eephus** doubles read bonuses and penalties.
+- **Knuckleball** can't be sat on but has wild control; **Eephus** doubles read bonuses and penalties.
+- High-stuff pitches (Triple-Digit Gas, 12-6 Hammer) have shaky control; command pitches (Painted Heater, Cutter, Heavy Sinker) rarely miss.
 - **Protect the Plate** and **Spoil It** survive two-strike counts.
 
 ## The AI
@@ -59,7 +62,8 @@ are public) and your past choices. None of them see your hand.
   equilibrium (fictitious play), and shifts toward exploiting your observed habits once it
   has scouted ~12 of your pitches. It shops by measuring each card's value against your deck.
 
-In simulation, Veteran beats Rookie ~93% of the time and All-Star beats Veteran ~77%.
+Pitchers also weigh **max effort** against its fatigue cost: the chance the Tired Arm comes
+back this inning plus how often it will turn up in the innings they still have to pitch.
 
 ## Project layout
 

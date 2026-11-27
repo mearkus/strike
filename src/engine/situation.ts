@@ -29,7 +29,7 @@ export interface AdvanceResult {
   steal: { result: 'safe' | 'caught'; to: 2 | 3 } | null;
 }
 
-export const BALLS_FOR_WALK = 3;
+export const BALLS_FOR_WALK = 4;
 export const STRIKES_FOR_OUT = 3;
 /** Fouls add a strike only while the count has fewer strikes than this. */
 export const FOUL_STRIKE_LIMIT = 2;
@@ -109,6 +109,7 @@ export function advance(before: Situation, outcome: PitchOutcome): AdvanceResult
 
   switch (outcome.kind) {
     case 'ball':
+      if (outcome.wild) move(1);
       sit.balls++;
       if (sit.balls >= BALLS_FOR_WALK) {
         const r = forceAdvance(sit.bases);

@@ -33,12 +33,16 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
 
 ## Architecture notes
 - `engine/cards.ts`: card catalog, starter decks, market supply, read triangle.
-- `engine/resolve.ts`: one pitch → `PitchOutcome` (dice drawn in a fixed order), plus
-  `outcomeDistribution` (exact enumeration, used by the AI). Tuning constants live here.
+- `engine/resolve.ts`: one pitch → command roll (`landing`) → `PitchOutcome` (dice drawn in a
+  fixed order), plus `outcomeDistribution` (exact enumeration, used by the AI). Tuning
+  constants live here.
 - `engine/situation.ts`: applies an outcome to bases/outs/count (`advance`).
 - `engine/game.ts`: the `GameState` reducer: pitches, at-bats, half-innings, market, game end.
 - `ai/value.ts`: run expectancy + count values → run value of any outcome.
-- `ai/ai.ts`: payoff matrix per pitch, Veteran = softmax best response, All-Star = Nash
-  (fictitious play) blended with exploitation of observed tendencies; shop logic.
+- `ai/ai.ts`: payoff matrix per pitch (each pitch with and without max effort, priced by
+  `fatigueCost`), Veteran = softmax best response, All-Star = Nash (fictitious play) blended
+  with exploitation of observed tendencies; shop logic.
+- Tuning note: the AI's count values feed back into how often it takes pitches, so after a
+  rules change, calibrate, re-run the sim, and repeat until the tables stop moving.
 - `ui/main.ts`: controller (AI turns, hot-seat privacy, localStorage autosave);
   `ui/view.ts`: pure HTML-string renderers; `ui/style.css`.

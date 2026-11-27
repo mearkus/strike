@@ -811,3 +811,29 @@ input:not([type='radio']) {
   border-bottom: 1px solid #0002;
   text-align: left;
 }
+
+/* ---------------- fatigue & effort */
+button.effort.on {
+  background: var(--heat);
+  border-color: #ff8a65;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 0 12px #e4572e88;
+}
+.effort-tag {
+  background: var(--heat);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+.fatigue {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.fatigue.high {
+  color: #ff8a65;
+  font-weight: 700;
+}

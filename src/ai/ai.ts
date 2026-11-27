@@ -1,17 +1,19 @@
 import { HACK, MEATBALL, batCard, card, pitchCard } from '../engine/cards';
 import { RELEASE_COST, MIN_DECK_SIZE, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
-import { type BatAction, canSteal } from '../engine/resolve';
+import { type BatAction, MAX_EFFORT_STUFF, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK } from '../engine/situation';
 import { Rng } from '../engine/rng';
-import type { Action, BatChoice, DeckName, Difficulty, GameState, PitchCardDef, PlayerId, Situation, ThrownType, Zone } from '../engine/types';
+import type { Action, BatChoice, DeckName, Difficulty, GameState, PitchCardDef, PitchChoice, PlayerId, Situation, ThrownType, Zone } from '../engine/types';
 import { expectedValue } from './value';
 
 // ---------------------------------------------------------------- options
 
 interface PitchOption {
   key: string;
-  choice: { card: number | null };
+  choice: PitchChoice;
   pitch: PitchCardDef;
+  /** Thrown with max effort: more stuff, one more Tired Arm. */
+  effort: boolean;
   /** Prior weight when this is the opponent's option (copies in their unseen pool). */
   weight: number;
 }
@@ -34,24 +36,63 @@ function countIds(ids: string[]): Map<string, number> {
   return m;
 }
 
-/** The AI's own pitching options: one per distinct card in hand. */
+/** How likely the AI thinks an opponent is to go max effort on a given pitch. */
+const EFFORT_PRIOR = 0.2;
+
+/** Add a max-effort variant of every real card. */
+function withEffort(opts: PitchOption[], weight = 1): PitchOption[] {
+  const out: PitchOption[] = [];
+  for (const o of opts) {
+    out.push(o);
+    out.push({
+      ...o,
+      key: `${o.key}!`,
+      choice: { ...o.choice, maxEffort: true },
+      pitch: { ...o.pitch, stuff: o.pitch.stuff + MAX_EFFORT_STUFF },
+      effort: true,
+      weight: o.weight * weight,
+    });
+  }
+  return out;
+}
+
+/** The AI's own pitching options: one per distinct card in hand, each with and without max effort. */
 function ownPitchOptions(s: GameState, p: PlayerId): PitchOption[] {
   const hand = s.players[p].pitching.hand;
-  if (hand.length === 0) return [{ key: MEATBALL, choice: { card: null }, pitch: pitchCard(MEATBALL), weight: 1 }];
+  if (hand.length === 0) return [{ key: MEATBALL, choice: { card: null }, pitch: pitchCard(MEATBALL), effort: false, weight: 1 }];
   const seen = new Map<string, PitchOption>();
   hand.forEach((id, i) => {
     const e = seen.get(id);
     if (e) e.weight++;
-    else seen.set(id, { key: id, choice: { card: i }, pitch: pitchCard(id), weight: 1 });
+    else seen.set(id, { key: id, choice: { card: i }, pitch: pitchCard(id), effort: false, weight: 1 });
   });
-  return [...seen.values()];
+  return withEffort([...seen.values()]);
 }
 
-/** What the opposing pitcher might throw: everything not in their discard pile. */
+/** What the opposing pitcher might throw: everything not in their discard pile, sometimes with max effort. */
 function oppPitchOptions(s: GameState, opp: PlayerId): PitchOption[] {
   const pile = s.players[opp].pitching;
-  if (pile.hand.length === 0) return [{ key: MEATBALL, choice: { card: null }, pitch: pitchCard(MEATBALL), weight: 1 }];
-  return [...countIds([...pile.draw, ...pile.hand])].map(([id, n]) => ({ key: id, choice: { card: null }, pitch: pitchCard(id), weight: n }));
+  if (pile.hand.length === 0) return [{ key: MEATBALL, choice: { card: null }, pitch: pitchCard(MEATBALL), effort: false, weight: 1 }];
+  const base = [...countIds([...pile.draw, ...pile.hand])].map(([id, n]) => ({ key: id, choice: { card: 0 }, pitch: pitchCard(id), effort: false, weight: n }));
+  return withEffort(base, EFFORT_PRIOR);
+}
+
+/** Runs a Tired Arm thrown in place of a typical pitch costs, roughly. */
+export const TIRED_ARM_THROW_COST = 0.07;
+const PITCHES_PER_HALF = 16;
+
+/**
+ * Expected cost of shuffling one Tired Arm into `me`'s draw pile: the chance it comes up during
+ * the rest of this half-inning, plus how often it will come up in the half-innings this player
+ * still has to pitch (capped, since it can be released or shaken off).
+ */
+export function fatigueCost(s: GameState, me: PlayerId): number {
+  const pile = s.players[me].pitching;
+  const cardsLeftThisHalf = (3 - s.sit.outs) * 5;
+  const now = Math.min(1, cardsLeftThisHalf / (pile.draw.length + 1));
+  const halvesLeft = Math.max(0, s.config.innings - s.inning);
+  const later = Math.min(2, (halvesLeft * PITCHES_PER_HALF) / (deckList(pile).length + 1));
+  return TIRED_ARM_THROW_COST * (now + later);
 }
 
 function ownBatOptions(s: GameState, p: PlayerId): BatOption[] {
@@ -254,22 +295,28 @@ export function chooseAction(s: GameState, player: PlayerId, difficulty: Difficu
   throw new Error('AI has nothing to do');
 }
 
-export function choosePitch(s: GameState, me: PlayerId, difficulty: Difficulty, rng: Rng): { card: number | null } {
+export function choosePitch(s: GameState, me: PlayerId, difficulty: Difficulty, rng: Rng): PitchChoice {
   const mine = ownPitchOptions(s, me);
   if (mine.length === 1) return mine[0].choice;
-  if (difficulty === 'rookie') return rng.pick(mine).choice;
+  if (difficulty === 'rookie') {
+    const plain = mine.filter((o) => !o.effort);
+    const pick = rng.pick(plain).choice;
+    return rng.next() < 0.15 ? { ...pick, maxEffort: true } : pick;
+  }
 
   const opp = (1 - me) as PlayerId;
   const bats = oppBatOptions(s, opp);
   const M = payoffMatrix(s, mine, bats);
+  const fatigue = fatigueCost(s, me);
+  const penalty = mine.map((o) => cardSpendPenalty(s, o.pitch.cost) + (o.effort ? fatigue : 0));
   // Pitcher wants to minimize batter value.
-  const util = (dist: number[]) => mine.map((o, i) => -dot(M[i], dist) - cardSpendPenalty(s, o.pitch.cost));
+  const util = (dist: number[]) => mine.map((_, i) => -dot(M[i], dist) - penalty[i]);
 
   if (difficulty === 'veteran') {
     return mine[sample(rng, softmax(util(normalize(bats.map((b) => b.weight))), 0.035))].choice;
   }
   // All-Star: equilibrium play, leaning toward exploiting observed tendencies.
-  const neg = M.map((row, i) => row.map((v) => -v - cardSpendPenalty(s, mine[i].pitch.cost)));
+  const neg = M.map((row, i) => row.map((v) => -v - penalty[i]));
   const eq = solveZeroSum(neg);
   let strategy = eq.row;
   const t = tendencies(s, opp, 'bat');

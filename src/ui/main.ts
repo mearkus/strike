@@ -42,6 +42,8 @@ interface Ui {
   error: string | null;
   /** Showing the "abandon this game?" bar. */
   confirmQuit: boolean;
+  /** The pitcher's max-effort toggle for the next pitch. */
+  maxEffort: boolean;
 }
 
 const SAVE_KEY = 'strike.save.v1';
@@ -60,6 +62,7 @@ const ui: Ui = {
   aiTimer: null,
   error: null,
   confirmQuit: false,
+  maxEffort: false,
 };
 const aiRng = new Rng(randomSeed());
 const root = document.getElementById('app')!;
@@ -120,6 +123,7 @@ function act(action: Action): void {
   }
   if (ui.game.history.length !== before) ui.revealKey++;
   ui.selected = null;
+  ui.maxEffort = false;
 }
 
 /** Advance the game: let AIs move, decide whose screen this is, render. */
@@ -180,7 +184,7 @@ function render(): void {
   else if (a === null) center = `<div class="hand-area"><p class="waiting">${g.phase === 'shop' ? `${esc(g.players[waitingOn(g)[0]].name)} is shopping…` : 'Thinking…'}</p></div>`;
   else if (v === null) center = passHtml(g, a);
   else if (g.phase === 'shop') center = shopHtml(g, v, ui.releaseDeck);
-  else center = handHtml(g, v, ui.selected);
+  else center = handHtml(g, v, ui.selected, ui.maxEffort);
 
   const scoutFor = v ?? (ui.humans.length === 1 ? ui.humans[0] : null);
   root.innerHTML = `
@@ -336,6 +340,7 @@ document.addEventListener('keydown', (e) => {
   if (n >= 1 && n <= 9) handle('select', { dataset: { i: String(n - 1) } } as unknown as HTMLElement);
   else if (e.key === 'Enter' && ui.selected !== null) handle(pitchingTeam(ui.game) === v ? 'throw' : 'play', null);
   else if (e.key.toLowerCase() === 't' && battingTeam(ui.game) === v) handle('take', null);
+  else if (e.key.toLowerCase() === 'e' && pitchingTeam(ui.game) === v) handle('effort', null);
 });
 
 function handle(actName: string, el: HTMLElement | null): void {
@@ -390,9 +395,12 @@ function handle(actName: string, el: HTMLElement | null): void {
       ui.selected = ui.selected === i ? null : i;
       return render();
     }
+    case 'effort':
+      ui.maxEffort = !ui.maxEffort;
+      return render();
     case 'throw':
       if (ui.selected === null) return;
-      act({ type: 'pitch', player: v, choice: { card: ui.selected } });
+      act({ type: 'pitch', player: v, choice: { card: ui.selected, maxEffort: ui.maxEffort } });
       break;
     case 'meatball':
       act({ type: 'pitch', player: v, choice: { card: null } });

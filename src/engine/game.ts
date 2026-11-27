@@ -13,7 +13,7 @@ import {
   card,
   pitchCard,
 } from './cards';
-import { type BatAction, canSteal, resolvePitch } from './resolve';
+import { type BatAction, MAX_EFFORT_STUFF, canSteal, throwPitch } from './resolve';
 import { Rng } from './rng';
 import { type AdvanceResult, advance, freshSituation } from './situation';
 import type {
@@ -22,11 +22,15 @@ import type {
   DeckName,
   Difficulty,
   GameState,
+  Landing,
   Pile,
+  PitchCardDef,
   PitchOutcome,
   PlayerId,
   PlayerState,
 } from './types';
+
+const TIRED_ARM = 'tiredArm';
 
 /** Extra innings stop after this many and the game is a tie. */
 export const MAX_EXTRA_INNINGS = 6;
@@ -159,6 +163,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (action.player !== pitchingTeam(s)) fail('Not your turn to pitch');
       if (s.pending.pitch) fail('Pitch already chosen');
       if (!legalPitchChoices(s).includes(action.choice.card)) fail('Illegal pitch');
+      if (action.choice.maxEffort && action.choice.card === null) fail('No max effort on a Tired Arm with an empty hand');
       s.pending.pitch = action.choice;
       break;
     }
@@ -238,7 +243,19 @@ function resolve(s: GameState, rng: Rng): void {
     pitchId = pitcher.pitching.hand.splice(pc.card, 1)[0];
     pitcher.pitching.discard.push(pitchId);
   }
-  const pitch = pitchCard(pitchId);
+  const maxEffort = pc.maxEffort === true && pc.card !== null;
+  const base = pitchCard(pitchId);
+  const pitch = maxEffort ? { ...base, stuff: base.stuff + MAX_EFFORT_STUFF } : base;
+  const notes: string[] = [];
+  if (maxEffort) {
+    // Like Heat: the strain comes back around soon. Shuffle the Tired Arm into the draw pile.
+    pitcher.pitching.draw.splice(rng.int(pitcher.pitching.draw.length + 1), 0, TIRED_ARM);
+    notes.push('Max effort: a Tired Arm is shuffled into the draw pile.');
+  }
+  if (pitch.effects.includes('easy') && pitcher.pitching.hand.includes(TIRED_ARM)) {
+    pitcher.pitching.hand.splice(pitcher.pitching.hand.indexOf(TIRED_ARM), 1);
+    notes.push('Easy on the arm: a Tired Arm is gone for good.');
+  }
 
   let batId: string | null = null;
   let bat: BatAction = { kind: 'take' };
@@ -251,11 +268,12 @@ function resolve(s: GameState, rng: Rng): void {
   }
 
   const before = structuredClone(s.sit);
-  const outcome = resolvePitch({ pitch, bat, sit: s.sit, abPitches: s.abPitches }, () => rng.d6());
+  const { outcome, landed } = throwPitch({ pitch, bat, sit: s.sit, abPitches: s.abPitches }, () => rng.d6());
   const adv = advance(s.sit, outcome);
 
-  // A checked swing keeps the card.
-  if (outcome.kind === 'ball' && outcome.checkSwing && batId !== null) {
+  // No swing happened (checked swing, or a pitch in the dirt): a swing or bunt card goes back to the hand.
+  const noSwing = outcome.kind === 'ball' && (outcome.checkSwing || (outcome.dirt && (bat.kind === 'swing' || (bat.kind === 'tactic' && bat.card.tactic === 'bunt'))));
+  if (noSwing && batId !== null) {
     batter.batting.discard.pop();
     batter.batting.hand.push(batId);
   }
@@ -270,9 +288,9 @@ function resolve(s: GameState, rng: Rng): void {
   batter.runsByInning[s.inning - 1] += adv.runs;
   if (adv.result && ['single', 'double', 'triple', 'homeRun', 'buntHit'].includes(adv.result)) batter.hits++;
 
-  const result = outcomeText(outcome, adv);
-  const text = `${describePitch(pitchId)} vs ${describeBat(bat)}: ${result}`;
-  s.lastPlay = { pitcher: pid, batter: bid, pitchCard: pitchId, batChoice: bc, batCard: batId, outcome, runs: adv.runs, text, result, situationBefore: before };
+  const result = [landingText(base, landed), outcomeText(outcome, adv), ...notes].filter(Boolean).join(' ');
+  const text = `${maxEffort ? 'MAX EFFORT ' : ''}${describePitch(pitchId)} vs ${describeBat(bat)}: ${result}`;
+  s.lastPlay = { pitcher: pid, batter: bid, pitchCard: pitchId, maxEffort, landed, batChoice: bc, batCard: batId, outcome, runs: adv.runs, text, result, situationBefore: before };
   s.history.push(s.lastPlay);
   log(s, text, adv.runs);
 
@@ -330,7 +348,7 @@ function endGame(s: GameState, winner: PlayerId | 'tie', text: string): void {
 
 function endHalfInning(s: GameState): void {
   const pid = pitchingTeam(s);
-  s.players[pid].pitching.discard.push('tiredArm');
+  s.players[pid].pitching.discard.push(TIRED_ARM);
   s.players[0].stars += 1;
   s.players[1].stars += 1;
   const away = score(s, 0);
@@ -403,7 +421,7 @@ export function outcomeText(outcome: PitchOutcome, adv: AdvanceResult): string {
   else if (!adv.inningOver || !adv.steal) {
     parts.push(
       {
-        ball: outcome.kind === 'ball' && outcome.checkSwing ? 'Checked swing! Ball.' : 'Ball.',
+        ball: outcome.kind === 'ball' && outcome.checkSwing ? 'Checked swing! Ball.' : outcome.kind === 'ball' && outcome.wild ? 'Ball, and it gets away: wild pitch! Runners move up.' : 'Ball.',
         calledStrike: 'Called strike.',
         swingingStrike: 'Swing and a miss.',
         foul: 'Fouled off.',
@@ -417,6 +435,13 @@ export function outcomeText(outcome: PitchOutcome, adv: AdvanceResult): string {
   }
   if (adv.runs > 0) parts.push(adv.runs === 1 ? '1 run scores.' : `${adv.runs} runs score.`);
   return parts.filter(Boolean).join(' ');
+}
+
+/** "Missed its spot" text when the command roll failed. */
+export function landingText(pitch: PitchCardDef, landed: Landing): string {
+  if (landed === pitch.zone) return '';
+  if (landed === 'dirt') return 'In the dirt!';
+  return `Missed its spot: ${ZONE_LABEL[landed].toLowerCase()}.`;
 }
 
 function describePitch(pitchId: string): string {

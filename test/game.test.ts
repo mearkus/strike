@@ -94,7 +94,52 @@ describe('pitching and batting', () => {
     s.players[pid].pitching.hand = [];
     s = pitch(s, null, { action: 'take' });
     expect(s.lastPlay?.pitchCard).toBe('tiredArm');
-    expect(s.lastPlay?.outcome.kind).toBe('calledStrike');
+    expect(['calledStrike', 'ball']).toContain(s.lastPlay?.outcome.kind);
+    expect(() => applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: null, maxEffort: true } })).toThrow(IllegalAction);
+  });
+
+  it('max effort adds stuff and shuffles a Tired Arm into the draw pile', () => {
+    let s = start(2);
+    const pid = pitchingTeam(s);
+    const tiredBefore = deckList(s.players[pid].pitching).filter((id) => id === 'tiredArm').length;
+    const drawBefore = s.players[pid].pitching.draw.length;
+    s = applyAction(s, { type: 'pitch', player: pid, choice: { card: 0, maxEffort: true } });
+    s = applyAction(s, { type: 'bat', player: battingTeam(s), choice: { action: 'take' } });
+    expect(s.lastPlay?.maxEffort).toBe(true);
+    expect(s.lastPlay?.text).toMatch(/^MAX EFFORT/);
+    const pile = s.players[pid].pitching;
+    expect(deckList(pile).filter((id) => id === 'tiredArm').length).toBe(tiredBefore + 1);
+    // The at-bat may not be over, so no refill: the draw pile grew by exactly one.
+    if (s.history.length === 1 && !s.lastPlay?.result.includes('Strike three')) expect(pile.draw.length).toBe(drawBefore + 1);
+  });
+
+  it('an Easy pitch removes a Tired Arm from the hand for good', () => {
+    let s = structuredClone(start(3));
+    const pid = pitchingTeam(s);
+    s.players[pid].pitching.hand = ['changeup', 'tiredArm', 'fourSeam'];
+    const before = deckList(s.players[pid].pitching).filter((id) => id === 'tiredArm').length;
+    s = pitch(s, 0, { action: 'take' });
+    expect(s.players[pid].pitching.hand).not.toContain('tiredArm');
+    expect(deckList(s.players[pid].pitching).filter((id) => id === 'tiredArm').length).toBe(before - 1);
+    expect(s.lastPlay?.result).toMatch(/Easy on the arm/);
+  });
+
+  it('a swing card comes back when the pitch ends up in the dirt', () => {
+    for (let seed = 1; seed < 400; seed++) {
+      let s = structuredClone(start(seed));
+      const pid = pitchingTeam(s);
+      const bid = battingTeam(s);
+      s.players[pid].pitching.hand = ['dirtCurve'];
+      s.players[bid].batting.hand = ['moonshot'];
+      s = pitch(s, 0, { action: 'play', card: 0 });
+      if (s.lastPlay?.landed === 'dirt') {
+        expect(s.lastPlay.outcome).toMatchObject({ kind: 'ball', dirt: true });
+        expect(s.players[bid].batting.hand).toContain('moonshot');
+        expect(s.lastPlay.result).toMatch(/In the dirt/);
+        return;
+      }
+    }
+    throw new Error('never landed in the dirt');
   });
 });
 

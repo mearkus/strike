@@ -90,6 +90,22 @@ describe('balls in play', () => {
   });
 });
 
+describe('wild pitches', () => {
+  it('move every runner up a base and still count as a ball', () => {
+    const r = advance(sit([true, false, true], 1, 1, 1), { kind: 'ball', dirt: true, wild: true });
+    expect(r.runs).toBe(1);
+    expect(r.sit.bases).toEqual([false, true, false]);
+    expect(r.sit.balls).toBe(2);
+  });
+
+  it('a wild ball four scores the runner from third and puts the batter on first', () => {
+    const r = advance(sit([false, false, true], 0, BALLS_FOR_WALK - 1, 0), { kind: 'ball', wild: true });
+    expect(r.result).toBe('walk');
+    expect(r.runs).toBe(1);
+    expect(r.sit.bases).toEqual([true, false, false]);
+  });
+});
+
 describe('steals', () => {
   it('a safe steal moves the lead runner and the count still applies', () => {
     const r = advance(sit([true, false, false], 0, 0, 0), { kind: 'calledStrike', steal: 'safe' });

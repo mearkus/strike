@@ -7,9 +7,10 @@
  */
 import { chooseAction } from '../src/ai/ai';
 import { basesMask } from '../src/ai/value';
-import { advance } from '../src/engine/situation';
+import { BALLS_FOR_WALK, advance } from '../src/engine/situation';
 import { applyAction, newGame, score, waitingOn } from '../src/engine/game';
 import { Rng } from '../src/engine/rng';
+import { pitchCard } from '../src/engine/cards';
 import type { Difficulty, GameState } from '../src/engine/types';
 
 const args = process.argv.slice(2);
@@ -38,13 +39,17 @@ function leagueStats(games: GameState[]) {
   const kinds: Record<string, number> = {};
   const bip: Record<string, number> = {};
   const res: Record<string, number> = {};
-  let pitches = 0, runs = 0, halfInnings = 0, steals = 0, cs = 0;
+  let pitches = 0, runs = 0, halfInnings = 0, steals = 0, cs = 0, effort = 0, missed = 0, dirt = 0, wild = 0;
   for (const g of games) {
     runs += score(g, 0) + score(g, 1);
     halfInnings += g.players[0].runsByInning.length + g.players[1].runsByInning.length;
     for (const h of g.history) {
       pitches++;
       const o = h.outcome;
+      if (h.maxEffort) effort++;
+      if (h.landed === 'dirt') dirt++;
+      if (h.landed !== pitchCard(h.pitchCard).zone) missed++;
+      if (o.kind === 'ball' && o.wild) wild++;
       kinds[o.kind] = (kinds[o.kind] ?? 0) + 1;
       if (o.kind === 'inPlay') bip[o.hit] = (bip[o.hit] ?? 0) + 1;
       if ('steal' in o && o.steal) o.steal === 'safe' ? steals++ : cs++;
@@ -65,12 +70,13 @@ function leagueStats(games: GameState[]) {
   const nb = Object.values(bip).reduce((a, b) => a + b, 0);
   console.log(`  in play:       ${['groundout', 'doublePlay', 'popout', 'flyout', 'single', 'double', 'triple', 'homeRun'].map((k) => `${k} ${(((bip[k] ?? 0) / nb) * 100).toFixed(0)}%`).join('  ')}`);
   console.log(`  steals:        ${steals} safe, ${cs} caught`);
+  console.log(`  command:       missed spot ${((missed / pitches) * 100).toFixed(0)}%  in dirt ${((dirt / pitches) * 100).toFixed(1)}%  wild pitches/game ${(wild / n).toFixed(2)}  max effort ${((effort / pitches) * 100).toFixed(1)}%`);
 }
 
 function calibrate(games: GameState[]) {
   // Runs scored from each pitch to the end of its half-inning, grouped by base-out state and by count.
   const re = Array.from({ length: 3 }, () => Array.from({ length: 8 }, () => ({ sum: 0, n: 0 })));
-  const cv = Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({ sum: 0, n: 0 })));
+  const cv = Array.from({ length: BALLS_FOR_WALK }, () => Array.from({ length: 3 }, () => ({ sum: 0, n: 0 })));
   const residuals: Array<{ h: GameState['history'][number]; future: number }> = [];
   for (const g of games) {
     const plays = g.history;
@@ -89,7 +95,7 @@ function calibrate(games: GameState[]) {
   const reVal = re.map((row) => row.map((c) => (c.n ? c.sum / c.n : 0)));
   for (const { h, future } of residuals) {
     const sb = h.situationBefore;
-    const c = cv[Math.min(sb.balls, 2)][Math.min(sb.strikes, 2)];
+    const c = cv[Math.min(sb.balls, BALLS_FOR_WALK - 1)][Math.min(sb.strikes, 2)];
     c.sum += future - reVal[sb.outs][basesMask(sb)];
     c.n++;
   }
