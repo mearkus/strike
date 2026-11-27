@@ -15,7 +15,8 @@ export type PitchEffect =
   | 'meatball' // +1 quality on contact
   | 'tunnel' // +2 stuff if the previous pitch this at-bat was Heat
   | 'weakContact' // -1 quality on contact
-  | 'deceptive'; // chase pitch with no check swing
+  | 'deceptive' // chase pitch with no check swing
+  | 'easy'; // when thrown, shakes a Tired Arm out of the pitcher's hand
 
 export type SwingEffect =
   | 'protect' // +3 contact with two strikes
@@ -34,6 +35,8 @@ export interface PitchCardDef {
   type: ThrownType;
   zone: Zone;
   stuff: number;
+  /** Command: the pitch hits its spot on a d6 roll of this or lower, otherwise it drifts one zone wider. */
+  control: number;
   cost: number;
   effects: PitchEffect[];
   text: string;
@@ -87,8 +90,11 @@ export type BallInPlay =
 
 export type StealResult = 'safe' | 'caught';
 
+/** Where a pitch actually ended up after the command roll. 'dirt' is a chase pitch that missed. */
+export type Landing = Zone | 'dirt';
+
 export type PitchOutcome =
-  | { kind: 'ball'; steal?: StealResult; checkSwing?: boolean }
+  | { kind: 'ball'; steal?: StealResult; checkSwing?: boolean; dirt?: boolean; wild?: boolean }
   | { kind: 'calledStrike'; steal?: StealResult }
   | { kind: 'swingingStrike'; steal?: StealResult }
   | { kind: 'foul' }
@@ -98,7 +104,8 @@ export type PitchOutcome =
   | { kind: 'buntOut' }
   | { kind: 'buntFoul' };
 
-export type PitchChoice = { card: number | null };
+/** `card: null` throws a Tired Arm when the hand is empty. Max effort adds stuff and fatigue. */
+export type PitchChoice = { card: number | null; maxEffort?: boolean };
 
 export type BatChoice =
   | { action: 'take' }
@@ -133,6 +140,8 @@ export interface PlayRecord {
   pitcher: PlayerId;
   batter: PlayerId;
   pitchCard: string;
+  maxEffort: boolean;
+  landed: Landing;
   batChoice: BatChoice;
   batCard: string | null;
   outcome: PitchOutcome;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardRating, chooseBat, choosePitch, solveZeroSum } from '../src/ai/ai';
+import { cardRating, chooseBat, choosePitch, fatigueCost, solveZeroSum } from '../src/ai/ai';
 import { outcomeValue, situationValue } from '../src/ai/value';
 import { isBatChoiceLegal, legalPitchChoices, newGame } from '../src/engine/game';
 import { Rng } from '../src/engine/rng';
@@ -47,6 +47,13 @@ describe('AI choices', () => {
       expect(legalPitchChoices(game)).toContain(choosePitch(game, 1, d, rng).card);
       expect(isBatChoiceLegal(game, chooseBat(game, 0, d, rng))).toBe(true);
     }
+  });
+
+  it('fatigue matters less as the game runs out', () => {
+    const late = structuredClone(game);
+    late.inning = late.config.innings;
+    expect(fatigueCost(game, 1)).toBeGreaterThan(fatigueCost(late, 1));
+    expect(fatigueCost(late, 1)).toBeGreaterThan(0);
   });
 
   it('rates premium cards above starters', () => {

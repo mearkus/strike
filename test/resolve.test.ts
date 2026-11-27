@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { HACK, batCard, pitchCard, readMod } from '../src/engine/cards';
-import { type BatAction, type PitchContext, outcomeDistribution, resolvePitch, stealResult } from '../src/engine/resolve';
+import {
+  type BatAction,
+  CHECK_SWING_ROLL,
+  type PitchContext,
+  WILD_PITCH_ROLL,
+  landing,
+  landingDistribution,
+  outcomeDistribution,
+  resolvePitch,
+  stealResult,
+  throwPitch,
+} from '../src/engine/resolve';
 import { Rng } from '../src/engine/rng';
 import type { Situation } from '../src/engine/types';
 
@@ -10,6 +21,8 @@ const swing = (id: string): BatAction => {
   return c.kind === 'swing' ? { kind: 'swing', card: c } : { kind: 'tactic', card: c };
 };
 const ctx = (pitch: string, bat: BatAction, sit: Situation = empty): PitchContext => ({ pitch: pitchCard(pitch), bat, sit, abPitches: [] });
+/** A pitch with perfect command, to test zone rules without the command roll. */
+const pinpoint = (pitch: string, bat: BatAction, sit: Situation = empty): PitchContext => ({ ...ctx(pitch, bat, sit), pitch: { ...pitchCard(pitch), control: 6 } });
 
 describe('read triangle', () => {
   it('rewards the right guess and punishes the counter', () => {
@@ -33,6 +46,9 @@ describe('outcomeDistribution', () => {
     ['changeup', swing('bunt'), { ...empty, bases: [true, false, false] }],
     ['fourSeam', swing('steal'), { ...empty, bases: [true, false, false] }],
     ['twoSeam', { kind: 'swing', card: HACK }, { ...empty, bases: [true, false, false] }],
+    ['dirtCurve', swing('steal'), { ...empty, bases: [true, false, true] }],
+    ['knuckleball', swing('sitHeat')],
+    ['tiredArm', { kind: 'take' }, { ...empty, bases: [false, true, false] }],
   ];
 
   it.each(cases)('sums to 1 (%s)', (p, b, s) => {
@@ -72,13 +88,14 @@ describe('matchups', () => {
   it('check swings turn some chases into balls, but not on deceptive pitches', () => {
     const checked = (pitch: string) =>
       outcomeDistribution(ctx(pitch, swing('swingAway'))).filter((o) => o.outcome.kind === 'ball').reduce((a, o) => a + o.p, 0);
-    expect(checked('highHeat')).toBeCloseTo(0.5, 6);
-    expect(checked('sweeper')).toBe(0);
+    expect(checked('highHeat')).toBeCloseTo((7 - CHECK_SWING_ROLL) / 6, 6);
+    // Sweeper: deceptive, so the only balls are its misses into the dirt.
+    expect(checked('sweeper')).toBeCloseTo(2 / 6, 6);
   });
 
-  it('taking a chase pitch is always a ball, a strike is always a strike', () => {
-    expect(outcomeDistribution(ctx('highHeat', { kind: 'take' }))).toEqual([{ outcome: { kind: 'ball' }, p: 1 }]);
-    expect(outcomeDistribution(ctx('fourSeam', { kind: 'take' }))).toEqual([{ outcome: { kind: 'calledStrike' }, p: 1 }]);
+  it('a located chase pitch taken is a ball, a located strike taken is a strike', () => {
+    expect(outcomeDistribution(pinpoint('highHeat', { kind: 'take' }))).toEqual([{ outcome: { kind: 'ball' }, p: 1 }]);
+    expect(outcomeDistribution(pinpoint('fourSeam', { kind: 'take' }))).toEqual([{ outcome: { kind: 'calledStrike' }, p: 1 }]);
   });
 
   it('pitchouts always catch stealers', () => {
@@ -102,6 +119,40 @@ describe('matchups', () => {
     const sac = outcomeDistribution(ctx('fourSeam', swing('bunt'), { ...empty, bases: [true, false, false] }))
       .filter((o) => o.outcome.kind === 'sacrifice')
       .reduce((a, o) => a + o.p, 0);
-    expect(sac).toBeGreaterThan(0.6);
+    expect(sac).toBeGreaterThan(0.55);
+  });
+});
+
+describe('command', () => {
+  it('a pitch hits its spot on a roll at or under its control, otherwise drifts one zone wider', () => {
+    const p = { ...pitchCard('fourSeam'), control: 4 }; // strike zone, control 4
+    expect(landing(p, 4)).toBe('strike');
+    expect(landing(p, 5)).toBe('edge');
+    expect(landing(pitchCard('slider'), 6)).toBe('chase');
+    expect(landing(pitchCard('dirtCurve'), 6)).toBe('dirt');
+    expect(landingDistribution(p)).toEqual([
+      ['strike', 4 / 6],
+      ['edge', 2 / 6],
+    ]);
+    expect(landingDistribution(pitchCard('highHeat'))).toEqual([['chase', 1]]);
+  });
+
+  it('a pitch in the dirt is a ball whatever the batter does', () => {
+    const rolls = [6, 1, 1]; // command miss, then anything
+    const r = throwPitch(ctx('dirtCurve', swing('moonshot')), () => rolls.shift() ?? 1);
+    expect(r.landed).toBe('dirt');
+    expect(r.outcome).toEqual({ kind: 'ball', dirt: true });
+  });
+
+  it('with runners on, a pitch in the dirt can be a wild pitch', () => {
+    const wild = outcomeDistribution(ctx('dirtCurve', { kind: 'take' }, { ...empty, bases: [true, false, false] }))
+      .filter((o) => o.outcome.kind === 'ball' && o.outcome.wild)
+      .reduce((a, o) => a + o.p, 0);
+    expect(wild).toBeCloseTo((1 / 6) * (WILD_PITCH_ROLL / 6), 9);
+  });
+
+  it('wild control produces more balls on takes', () => {
+    const ballP = (id: string) => outcomeDistribution(ctx(id, { kind: 'take' })).filter((o) => o.outcome.kind === 'ball').reduce((a, o) => a + o.p, 0);
+    expect(ballP('tiredArm')).toBeGreaterThan(ballP('cutter'));
   });
 });

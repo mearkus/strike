@@ -2,6 +2,7 @@ import { readMod } from './cards';
 import type {
   BallInPlay,
   Bases,
+  Landing,
   PitchCardDef,
   PitchOutcome,
   Situation,
@@ -26,14 +27,32 @@ export interface PitchContext {
   abPitches: ThrownType[];
 }
 
-export const ZONE_CONTACT: Record<Zone, number> = { strike: 1, edge: -1, chase: -3 };
+export const ZONE_CONTACT: Record<Zone, number> = { strike: 0, edge: -1, chase: -3 };
 /** Taken edge pitches are called strikes on a d6 roll of this or higher (a coin flip). */
 export const EDGE_STRIKE_ROLL = 4;
 
 /** Swinging at a non-deceptive chase pitch: hold up on a d6 roll of this or higher. */
-export const CHECK_SWING_ROLL = 4;
-export const MISS_MAX = 3; // contact <= 3: swing and miss
-export const FOUL_MAX = 7; // contact 4-7: foul; 8+: in play
+export const CHECK_SWING_ROLL = 3;
+/** Extra stuff on a Max Effort pitch (which also costs a Tired Arm). */
+export const MAX_EFFORT_STUFF = 2;
+/** A pitch in the dirt with runners on is a wild pitch on a d6 roll of this or lower. */
+export const WILD_PITCH_ROLL = 2;
+
+const WIDER: Record<Zone, Landing> = { strike: 'edge', edge: 'chase', chase: 'dirt' };
+
+/** Where a pitch lands for a given command roll. */
+export function landing(pitch: PitchCardDef, roll: number): Landing {
+  return roll <= pitch.control ? pitch.zone : WIDER[pitch.zone];
+}
+
+/** Probability the pitch hits its spot. */
+export function onTargetChance(pitch: PitchCardDef): number {
+  return Math.max(0, Math.min(6, pitch.control)) / 6;
+}
+
+const anyRunner = (b: Bases) => b[0] || b[1] || b[2];
+export const MISS_MAX = 2; // contact <= 2: swing and miss
+export const FOUL_MAX = 6; // contact 3-6: foul; 7+: in play
 
 export function effectiveStuff(pitch: PitchCardDef, abPitches: ThrownType[]): number {
   let stuff = pitch.stuff;
@@ -70,14 +89,22 @@ export function swingModifiers(ctx: PitchContext, swing: SwingCardDef): { contac
   return { contact, quality, read };
 }
 
-/** Quality (2d6 + modifiers) of a ball in play. Contact hitters (power <= 0) leg out triples instead of homers. */
-export function qualityToHit(q: number, power: number): BallInPlay {
+/** Contact at least this solid turns a borderline (quality 9) ball into a single; weaker contact is caught. */
+export const SOLID_CONTACT = 8;
+
+/**
+ * Quality (2d6 + modifiers) of a ball in play. A 9 is a single only on solid contact.
+ * Contact hitters (power <= 0) stretch a 12 into a triple.
+ */
+export function qualityToHit(q: number, power: number, contact = SOLID_CONTACT): BallInPlay {
   if (q <= 5) return 'groundout';
   if (q === 6) return 'popout';
   if (q <= 8) return 'flyout';
-  if (q <= 10) return 'single';
+  if (q === 9) return contact >= SOLID_CONTACT ? 'single' : 'flyout';
+  if (q === 10) return 'single';
   if (q === 11) return 'double';
-  return power <= 0 ? 'triple' : 'homeRun';
+  if (q === 12) return power <= 0 ? 'triple' : 'double';
+  return 'homeRun';
 }
 
 export function canDoublePlay(sit: Situation): boolean {
@@ -120,9 +147,9 @@ export function swingOutcome(ctx: PitchContext, swing: SwingCardDef, sum2d6: num
   }
   if (contact <= FOUL_MAX) return { kind: 'foul' };
   let q = quality2d6 + mods.quality;
-  if (contact >= 11) q += 1;
-  if (contact >= 14) q += 1;
-  let hit = qualityToHit(q, swing.power);
+  if (contact >= 12) q += 1;
+  if (contact >= 15) q += 1;
+  let hit = qualityToHit(q, swing.power, contact);
   const hitAndRun = swing.effects.includes('hitAndRun');
   if (hit === 'groundout' && !hitAndRun && canDoublePlay(ctx.sit)) {
     const dpMax = ctx.pitch.effects.includes('sinker') ? 4 : 3;
@@ -171,11 +198,38 @@ function takeDistribution(pitch: PitchCardDef): Array<[PitchOutcome, number]> {
   return out;
 }
 
+/** A thrown pitch: where it landed and what happened. */
+export interface ThrowResult {
+  landed: Landing;
+  outcome: PitchOutcome;
+}
+
 /**
- * Resolve one pitch. `d6` supplies dice; it is called in a fixed order
- * (2d6 then 1d6 for swings, 1d6 for steals and bunts, 1d6 umpire for takes) so outcomes are reproducible.
+ * Throw one pitch. `d6` supplies dice in a fixed order so outcomes are reproducible:
+ * the command roll first, then the batter's dice (2d6 contact + 2d6 quality for swings,
+ * 1d6 for steals and bunts, 1d6 umpire for takes), then a wild-pitch roll for pitches in the dirt.
  */
+export function throwPitch(ctx: PitchContext, d6: () => number): ThrowResult {
+  const landed = landing(ctx.pitch, d6());
+  if (landed === 'dirt') return { landed, outcome: dirtOutcome(ctx, d6) };
+  return { landed, outcome: resolveLocated({ ...ctx, pitch: { ...ctx.pitch, zone: landed } }, d6) };
+}
+
 export function resolvePitch(ctx: PitchContext, d6: () => number): PitchOutcome {
+  return throwPitch(ctx, d6).outcome;
+}
+
+/** In the dirt: a ball whatever the batter did. Steals still go; runners may advance on a wild pitch. */
+function dirtOutcome(ctx: PitchContext, d6: () => number): PitchOutcome {
+  const { bat, sit, pitch } = ctx;
+  const out: Extract<PitchOutcome, { kind: 'ball' }> = { kind: 'ball', dirt: true };
+  if (bat.kind === 'tactic' && bat.card.tactic === 'steal' && canSteal(sit.bases)) out.steal = stealResult(pitch, sit.bases, bat.card.bonus, d6());
+  if (anyRunner(sit.bases) && d6() <= WILD_PITCH_ROLL) out.wild = true;
+  return out;
+}
+
+/** Resolve a pitch that landed in `ctx.pitch.zone`. */
+function resolveLocated(ctx: PitchContext, d6: () => number): PitchOutcome {
   const { bat, pitch, sit } = ctx;
   if (bat.kind === 'take') return takeOutcome(pitch, d6());
   if (bat.kind === 'swing') {
@@ -204,8 +258,46 @@ export interface WeightedOutcome {
   p: number;
 }
 
+/** Landing spots and their probabilities for a pitch. */
+export function landingDistribution(pitch: PitchCardDef): Array<[Landing, number]> {
+  const c = Math.max(0, Math.min(6, pitch.control));
+  const out: Array<[Landing, number]> = [];
+  if (c > 0) out.push([pitch.zone, c / 6]);
+  if (c < 6) out.push([WIDER[pitch.zone], (6 - c) / 6]);
+  return out;
+}
+
 /** Exact probability distribution of outcomes for a pitch/bat pairing. Used by the AI. */
 export function outcomeDistribution(ctx: PitchContext): WeightedOutcome[] {
+  const acc = new Map<string, WeightedOutcome>();
+  const add = (o: PitchOutcome, p: number) => {
+    const key = JSON.stringify(o);
+    const e = acc.get(key);
+    if (e) e.p += p;
+    else acc.set(key, { outcome: o, p });
+  };
+  const { bat, sit, pitch } = ctx;
+  for (const [landed, pl] of landingDistribution(pitch)) {
+    if (landed !== 'dirt') {
+      for (const { outcome, p } of locatedDistribution({ ...ctx, pitch: { ...pitch, zone: landed } })) add(outcome, p * pl);
+      continue;
+    }
+    const stealing = bat.kind === 'tactic' && bat.card.tactic === 'steal' && canSteal(sit.bases);
+    const steals: Array<[StealResult | undefined, number]> = stealing
+      ? [1, 2, 3, 4, 5, 6].map((r) => [stealResult(pitch, sit.bases, (bat as { card: TacticCardDef }).card.bonus, r), 1 / 6])
+      : [[undefined, 1]];
+    const pWild = anyRunner(sit.bases) ? WILD_PITCH_ROLL / 6 : 0;
+    for (const [steal, ps] of steals) {
+      const base: Extract<PitchOutcome, { kind: 'ball' }> = steal ? { kind: 'ball', dirt: true, steal } : { kind: 'ball', dirt: true };
+      if (pWild > 0) add({ ...base, wild: true }, pl * ps * pWild);
+      if (pWild < 1) add(base, pl * ps * (1 - pWild));
+    }
+  }
+  return [...acc.values()];
+}
+
+/** Distribution for a pitch that landed in `ctx.pitch.zone`. */
+function locatedDistribution(ctx: PitchContext): WeightedOutcome[] {
   const { bat, pitch, sit } = ctx;
   const acc = new Map<string, WeightedOutcome>();
   const add = (o: PitchOutcome, p: number) => {

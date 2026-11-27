@@ -1,6 +1,6 @@
 import { FOOLED_BY, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
 import { MIN_DECK_SIZE, RELEASE_COST, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
-import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, canSteal } from '../engine/resolve';
+import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK, STRIKES_FOR_OUT } from '../engine/situation';
 import type { CardDef, DeckName, Difficulty, GameState, PlayRecord, PlayerId } from '../engine/types';
 
@@ -52,7 +52,8 @@ function headLabel(c: CardDef): string {
 }
 
 function statsHtml(c: CardDef): string {
-  if (c.kind === 'pitch') return `<span class="zone z-${c.zone}">${ZONE_LABEL[c.zone]}</span><span>Stuff ${c.stuff}</span>`;
+  if (c.kind === 'pitch')
+    return `<span class="zone z-${c.zone}">${ZONE_LABEL[c.zone]}</span><span>Stuff ${c.stuff}</span><span title="Hits its spot on a d6 roll of ${c.control} or less">Ctrl ${c.control}</span>`;
   if (c.kind === 'swing') return `<span>Contact ${signed(c.contact)}</span><span>Power ${signed(c.power)}</span>`;
   const label = { steal: 'Steal', bunt: 'Bunt', goodEye: 'Take + draw' }[c.tactic];
   return `<span>${label}</span>${c.bonus ? `<span>${signed(c.bonus)}</span>` : ''}`;
@@ -116,11 +117,11 @@ export function lastPlayHtml(s: GameState, animate: boolean): string {
   const batCard = lp.batCard
     ? cardHtml(lp.batCard, { small: true })
     : `<div class="card small blank"><div class="card-name">${lp.batChoice.action === 'take' ? 'Takes' : 'Hack'}</div><div class="card-text">${lp.batChoice.action === 'take' ? 'No swing.' : 'A swing with no card.'}</div></div>`;
-  const big = lp.runs > 0 ? 'runs' : /Home run|triple|double|Base hit|Bunt single|Ball four|Stolen/.test(lp.result) ? 'good' : /Strike three|double play|Caught/.test(lp.result) ? 'bad' : '';
+  const big = lp.runs > 0 ? 'runs' : /Home run|triple|double|Base hit|Bunt single|Ball four|Stolen|wild pitch/.test(lp.result) ? 'good' : /Strike three|double play|Caught/.test(lp.result) ? 'bad' : '';
   const result = lp.result;
   return `<div class="reveal${animate ? ' animate' : ''}">
     <div class="duel">
-      <div class="side"><div class="who">${esc(s.players[lp.pitcher].name)} pitched</div>${cardHtml(lp.pitchCard, { small: true })}</div>
+      <div class="side"><div class="who">${esc(s.players[lp.pitcher].name)} pitched${lp.maxEffort ? ' <span class="effort-tag">MAX EFFORT</span>' : ''}</div>${cardHtml(lp.pitchCard, { small: true })}</div>
       <div class="vs">vs</div>
       <div class="side"><div class="who">${esc(s.players[lp.batter].name)} batted</div>${batCard}</div>
     </div>
@@ -163,6 +164,8 @@ export function scoutingHtml(s: GameState, viewer: PlayerId): string {
     });
     rows += `<div class="bars">${[...PITCH_TYPES, 'knuckle'].filter((t) => types.get(t)).map((t) => `<span class="mini t-${t}">${TYPE_LABEL[t]} ${pct(types.get(t)!)}</span>`).join('')}</div>`;
     rows += `<div class="bars">${['strike', 'edge', 'chase'].filter((z) => zones.get(z)).map((z) => `<span class="mini zone z-${z}">${ZONE_LABEL[z]} ${pct(zones.get(z)!)}</span>`).join('')}</div>`;
+    const tired = tiredCount(deckList(s.players[opp].pitching));
+    rows += `<p class="muted">Fatigue: ${tired} Tired Arm${tired === 1 ? '' : 's'} in their deck.</p>`;
   } else {
     const sits = new Map<string, number>();
     for (const id of unseen) {
@@ -179,6 +182,11 @@ export function scoutingHtml(s: GameState, viewer: PlayerId): string {
   </div>`;
 }
 
+function fatigueHtml(deck: string[]): string {
+  const n = tiredCount(deck);
+  return `<span class="fatigue ${n >= 3 ? 'high' : ''}" title="Tired Arm cards in your pitching deck">Fatigue: ${n} Tired Arm${n === 1 ? '' : 's'} in ${deck.length} cards</span>`;
+}
+
 export function deckSummaryHtml(s: GameState, p: PlayerId, deck: DeckName): string {
   const pile = s.players[p][deck];
   return `<span class="muted">Draw ${pile.draw.length} · Discard ${pile.discard.length} · Deck ${deckList(pile).length}</span>`;
@@ -186,7 +194,9 @@ export function deckSummaryHtml(s: GameState, p: PlayerId, deck: DeckName): stri
 
 // ---------------------------------------------------------------- hand & controls
 
-export function handHtml(s: GameState, viewer: PlayerId, selected: number | null): string {
+const tiredCount = (ids: string[]) => ids.filter((id) => id === 'tiredArm').length;
+
+export function handHtml(s: GameState, viewer: PlayerId, selected: number | null, maxEffort = false): string {
   const pitching = pitchingTeam(s) === viewer;
   const pl = s.players[viewer];
   const pile = pitching ? pl.pitching : pl.batting;
@@ -207,7 +217,8 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
     controls =
       pile.hand.length === 0
         ? `<button class="primary" data-act="meatball">Out of cards: groove a Tired Arm fastball</button>`
-        : `<button class="primary" data-act="throw" ${sel ? '' : 'disabled'}>${sel ? `Throw ${esc(sel.name)}` : 'Pick a pitch'}</button>`;
+        : `<button class="primary" data-act="throw" ${sel ? '' : 'disabled'}>${sel ? `Throw ${esc(sel.name)}${maxEffort ? ' with max effort' : ''}` : 'Pick a pitch'}</button>
+      <button class="effort ${maxEffort ? 'on' : ''}" data-act="effort" aria-pressed="${maxEffort}" title="+${MAX_EFFORT_STUFF} stuff on this pitch, but a Tired Arm is shuffled into your draw pile. (E)">🔥 Max effort: ${maxEffort ? 'ON' : 'off'}</button>`;
   } else {
     const sel = selected !== null ? card(pile.hand[selected]) : null;
     const verb = sel ? (sel.kind === 'swing' ? `Swing: ${esc(sel.name)}` : `Play ${esc(sel.name)}`) : 'Pick a card to swing';
@@ -216,7 +227,7 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
       <button data-act="hack" title="Swing without spending a card: contact -1, power 0, sit any.">Hack (no card)</button>`;
   }
   return `<div class="hand-area">
-    <div class="hand-head"><h3>${esc(pl.name)}: your ${pitching ? 'pitching' : 'batting'} hand</h3>${deckSummaryHtml(s, viewer, pitching ? 'pitching' : 'batting')}</div>
+    <div class="hand-head"><h3>${esc(pl.name)}: your ${pitching ? 'pitching' : 'batting'} hand</h3>${deckSummaryHtml(s, viewer, pitching ? 'pitching' : 'batting')}${pitching ? fatigueHtml(deckList(pl.pitching)) : ''}</div>
     <div class="hand">${cards || '<p class="muted">No cards in hand.</p>'}</div>
     <div class="controls">${controls}</div>
   </div>`;
@@ -287,12 +298,20 @@ export function rulesHtml(): string {
   <p>Two managers alternate half-innings as <b>pitcher</b> and <b>batter</b>. Each of you has a <b>pitching deck</b> and a <b>batting deck</b>. Every pitch, both sides secretly pick a card, then reveal.</p>
   <h3>The pitch</h3>
   <ul>
-    <li><b>Pitcher</b> plays a pitch card: a <b>type</b> (Heat, Breaking, Offspeed), a <b>zone</b> (Strike, Edge, Chase) and <b>stuff</b> (how nasty it is).</li>
+    <li><b>Pitcher</b> plays a pitch card: a <b>type</b> (Heat, Breaking, Offspeed), a <b>zone</b> (Strike, Edge, Chase), <b>stuff</b> (how nasty it is) and <b>control</b>.</li>
+    <li><b>Command:</b> every pitch rolls a d6. At or under its control it hits its spot; over, it misses one zone wider (Strike → Edge → Chase → in the dirt). A pitch in the dirt is a ball no matter what, any swing card goes back to your hand, and with runners on it may get away for a <b>wild pitch</b> (${Math.round((WILD_PITCH_ROLL / 6) * 100)}%), moving everyone up.</li>
     <li><b>Batter</b> plays a swing card, a tactic, <b>Takes</b> (no card), or <b>Hacks</b> (a weak swing with no card).</li>
     <li><b>Taking:</b> a Strike-zone pitch is a strike, a Chase pitch is a ball, an Edge pitch is the umpire's call (strike ${edgePct}% of the time).</li>
-    <li><b>Swinging:</b> roll 2d6 + contact − stuff, +1 on a Strike-zone pitch, −1 on the Edge, −3 on a Chase. Low = miss, middle = foul, high = ball in play. A second 2d6 + power decides how far it goes.</li>
+    <li><b>Swinging:</b> roll 2d6 + contact − stuff, ${ZONE_CONTACT.edge} on the Edge, ${ZONE_CONTACT.chase} on a Chase. Low = miss, middle = foul, high = ball in play. A second 2d6 + power decides how far it goes.</li>
     <li><b>Check swing:</b> swing at a Chase pitch and ${checkPct}% of the time you hold up. It's a ball and you keep your card. Deceptive pitches don't allow it.</li>
     <li><b>${BALLS_FOR_WALK} balls</b> is a walk, <b>${STRIKES_FOR_OUT} strikes</b> is a strikeout, and two-strike fouls don't count.</li>
+  </ul>
+  <h3>Fatigue and max effort</h3>
+  <ul>
+    <li><b>Tired Arm</b> cards are flat, wild (control 2) and hittable. You gain one after every half-inning you pitch.</li>
+    <li><b>🔥 Max effort:</b> reach back for +${MAX_EFFORT_STUFF} stuff on any pitch, but a Tired Arm is <b>shuffled into your draw pile</b>, so the strain can come back this same inning.</li>
+    <li><b>Easy</b> pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand for good when you throw them.</li>
+    <li>You can also release a Tired Arm in the market.</li>
   </ul>
   <h3>The read triangle</h3>
   <p>Swing cards "sit" on a pitch type. Guess right for +3 contact; get fooled for −2. "Any" swings never gain or lose.</p>
@@ -308,7 +327,6 @@ export function rulesHtml(): string {
   <ul>
     <li>Earn <b>stars</b>: batters for hits, walks, runs and steals; pitchers for outs and strikeouts; everyone +1 per half-inning.</li>
     <li>After each half-inning, both managers visit the <b>market</b> (trailing team first) to sign new cards or release one.</li>
-    <li>Pitchers tire: after each half-inning you pitch, a <b>Tired Arm</b> goes into your pitching deck. Release it to stay sharp.</li>
     <li>Hands refill at the start of each at-bat: 5 pitches, 4 batting cards.</li>
   </ul>
   <h3>Scouting</h3>
