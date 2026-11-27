@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "starter": {
+      "source": { "source": "github", "repo": "mearkus/starter" }
+    }
+  },
+  "enabledPlugins": {
+    "starter-kit@starter": true
+  }
+}
