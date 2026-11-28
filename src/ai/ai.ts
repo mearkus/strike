@@ -1,10 +1,10 @@
-import { HACK, MEATBALL, batCard, card, pitchCard } from '../engine/cards';
+import { HACK, MEATBALL, PITCH_HAND_SIZE, batCard, card, pitchCard } from '../engine/cards';
 import { ECONOMY, RELEASE_COST, MIN_DECK_SIZE, STAMINA, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
 import { type BatAction, MAX_EFFORT_STUFF, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK } from '../engine/situation';
 import { Rng } from '../engine/rng';
 import type { Action, BatChoice, DeckName, Difficulty, GameState, PitchCardDef, PitchChoice, PlayerId, Situation, ThrownType, Zone } from '../engine/types';
-import { expectedValue } from './value';
+import { expectedValue, outcomeValue } from './value';
 
 // ---------------------------------------------------------------- options
 
@@ -34,6 +34,55 @@ function countIds(ids: string[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const id of ids) m.set(id, (m.get(id) ?? 0) + 1);
   return m;
+}
+
+/** Walk a batter on purpose only when it's this many runs better than pitching to him. */
+const IBB_MARGIN = 0.02;
+/** Take a mound visit only when a fresh hand looks at least this many runs better. */
+const MOUND_VISIT_MARGIN = 0.03;
+
+/** Run value (to the batting side) of an intentional walk right now. */
+function intentionalWalkValue(s: GameState): number {
+  return outcomeValue(s.sit, { kind: 'intentionalWalk' });
+}
+
+/** The Veteran's picture of a hitter: its prior, blended with what it has seen once it has seen enough. */
+function veteranBatModel(s: GameState, opp: PlayerId, bats: BatOption[]): number[] {
+  const prior = normalize(bats.map((b) => b.weight));
+  const t = tendencies(s, opp, 'bat');
+  return t.samples >= VETERAN_SCOUTING_PITCHES ? mix(prior, empiricalBatDist(bats, t, s.sit), 0.7) : prior;
+}
+
+/**
+ * Should the pitcher use its once-per-half-inning mound visit? Compares the best pitch in the
+ * current hand with the expected best pitch of a fresh hand drawn from what's left.
+ */
+export function shouldVisitMound(s: GameState, me: PlayerId, difficulty: Difficulty, rng: Rng): boolean {
+  if (difficulty === 'rookie' || s.moundVisitUsed) return false;
+  const pile = s.players[me].pitching;
+  if (pile.hand.length === 0) return false;
+  const opp = (1 - me) as PlayerId;
+  const bats = oppBatOptions(s, opp);
+  const model = veteranBatModel(s, opp, bats);
+  const value = new Map<string, number>();
+  const pitcherValue = (id: string) => {
+    if (!value.has(id)) {
+      const p = pitchCard(id);
+      value.set(id, -bats.reduce((a, b, j) => a + model[j] * expectedValue({ pitch: p, bat: b.bat, sit: s.sit, abPitches: s.abPitches }), 0));
+    }
+    return value.get(id)!;
+  };
+  const current = Math.max(...pile.hand.map(pitcherValue));
+  // A fresh hand comes from the draw pile, reshuffling the discards (and this hand) if it runs short.
+  const pool = pile.draw.length >= PITCH_HAND_SIZE ? [...pile.draw] : [...pile.draw, ...pile.discard, ...pile.hand];
+  const size = Math.min(PITCH_HAND_SIZE, pool.length);
+  let total = 0;
+  const samples = 24;
+  for (let k = 0; k < samples; k++) {
+    const hand = rng.shuffle([...pool]).slice(0, size);
+    total += Math.max(...hand.map(pitcherValue));
+  }
+  return total / samples - current > MOUND_VISIT_MARGIN;
 }
 
 /** The Veteran starts using what it has seen of an opponent after this many of their pitches. */
@@ -252,7 +301,7 @@ interface Tendencies {
 
 /** What the AI has learned about a player from their previous choices. */
 export function tendencies(s: GameState, who: PlayerId, role: 'bat' | 'pitch'): Tendencies {
-  const plays = s.history.filter((h) => (role === 'bat' ? h.batter === who : h.pitcher === who));
+  const plays = s.history.filter((h) => (role === 'bat' ? h.batter === who : h.pitcher === who) && h.outcome.kind !== 'intentionalWalk');
   const t: Tendencies = { samples: plays.length, takeRate: { normal: 0.3, twoStrike: 0.15 }, sitShare: {}, typeShare: {}, zoneShare: {} };
   if (role === 'bat') {
     const bucket = (two: boolean) => plays.filter((h) => (h.situationBefore.strikes === 2) === two);
@@ -316,7 +365,10 @@ export interface Decision {
 
 export function chooseAction(s: GameState, player: PlayerId, difficulty: Difficulty, rng: Rng): Action {
   if (s.phase === 'pitch') {
-    if (player === pitchingTeam(s) && !s.pending.pitch) return { type: 'pitch', player, choice: choosePitch(s, player, difficulty, rng) };
+    if (player === pitchingTeam(s) && !s.pending.pitch) {
+      if (shouldVisitMound(s, player, difficulty, rng)) return { type: 'moundVisit', player };
+      return { type: 'pitch', player, choice: choosePitch(s, player, difficulty, rng) };
+    }
     if (player === battingTeam(s) && !s.pending.bat) return { type: 'bat', player, choice: chooseBat(s, player, difficulty, rng) };
   }
   if (s.phase === 'shop') return chooseShop(s, player, difficulty, rng);
@@ -340,17 +392,20 @@ export function choosePitch(s: GameState, me: PlayerId, difficulty: Difficulty, 
   // Pitcher wants to minimize batter value.
   const util = (dist: number[]) => mine.map((_, i) => -dot(M[i], dist) - penalty[i]);
 
+  const walk = intentionalWalkValue(s);
+
   if (difficulty === 'veteran') {
     // Plays the percentages against what it has seen: after a few pitches it uses the hitter's
     // real take rate and favorite reads instead of assuming every hitter swings 70% of the time.
-    const prior = normalize(bats.map((b) => b.weight));
-    const t = tendencies(s, opp, 'bat');
-    const model = t.samples >= VETERAN_SCOUTING_PITCHES ? mix(prior, empiricalBatDist(bats, t, s.sit), 0.7) : prior;
-    return mine[sample(rng, softmax(util(model), 0.035))].choice;
+    const model = veteranBatModel(s, opp, bats);
+    const u = util(model);
+    if (walk < -Math.max(...u) - IBB_MARGIN) return { card: null, intentionalWalk: true };
+    return mine[sample(rng, softmax(u, 0.035))].choice;
   }
   // All-Star: equilibrium play, leaning toward exploiting observed tendencies.
   const neg = M.map((row, i) => row.map((v) => -v - penalty[i]));
   const eq = solveZeroSum(neg);
+  if (walk < -eq.value - IBB_MARGIN) return { card: null, intentionalWalk: true };
   let strategy = eq.row;
   const t = tendencies(s, opp, 'bat');
   if (t.samples >= ALLSTAR_SCOUTING_PITCHES) {

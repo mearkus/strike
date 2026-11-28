@@ -47,6 +47,8 @@ interface Ui {
   maxEffort: boolean;
   /** Narrow screens: show the box score / scouting / log panel. */
   showSide: boolean;
+  /** The intentional-walk button was clicked once and is asking for confirmation. */
+  confirmWalk: boolean;
   /** A half-inning just ended: hold on the field with a recap until the player continues. */
   recap: boolean;
   /** The card released on this market visit, kept in its slot so the list doesn't reflow. */
@@ -71,6 +73,7 @@ const ui: Ui = {
   confirmQuit: false,
   maxEffort: false,
   showSide: false,
+  confirmWalk: false,
   recap: false,
   released: null,
 };
@@ -141,6 +144,7 @@ function act(action: Action): void {
   if (phaseBefore === 'pitch' && ui.game.phase === 'shop') ui.recap = true;
   ui.selected = null;
   ui.maxEffort = false;
+  ui.confirmWalk = false;
 }
 
 /** Advance the game: let AIs move, decide whose screen this is, render. */
@@ -151,8 +155,12 @@ function step(): void {
   }
   const g = ui.game;
   if (g && g.phase === 'pitch') {
-    // AIs choose instantly and in secret.
-    for (const p of waitingOn(g)) if (g.players[p].ai) act(chooseAction(ui.game!, p, g.players[p].ai!, aiRng));
+    // AIs choose instantly and in secret (a mound visit and then a pitch can take two actions).
+    for (let guard = 0; guard < 4 && ui.game!.phase === 'pitch'; guard++) {
+      const p = waitingOn(ui.game!).find((q) => ui.game!.players[q].ai);
+      if (p === undefined) break;
+      act(chooseAction(ui.game!, p, ui.game!.players[p].ai!, aiRng));
+    }
   }
   const g2 = ui.game;
   if (g2 && g2.phase === 'shop' && !ui.recap) {
@@ -227,7 +235,7 @@ function renderInner(): void {
   else if (a === null) dock = `<div class="dock-msg"><p class="waiting">${g.phase === 'shop' ? `${esc(g.players[waitingOn(g)[0]].name)} is shopping…` : 'Thinking…'}</p></div>`;
   else if (v === null) dock = passHtml(g, a);
   else if (g.phase === 'shop') dock = `<div class="dock-msg"><p class="waiting">Market is open.</p></div>`;
-  else dock = handHtml(g, v, ui.selected, ui.maxEffort);
+  else dock = handHtml(g, v, ui.selected, ui.maxEffort, ui.confirmWalk);
 
   const scoutFor = v ?? (ui.humans.length === 1 ? ui.humans[0] : null);
   const shopOpen = g.phase === 'shop' && v !== null && !ui.recap;
@@ -476,6 +484,7 @@ function handle(actName: string, el: HTMLElement | null): void {
       const hand = pitchingTeam(g) === v ? g.players[v].pitching.hand : g.players[v].batting.hand;
       if (i < 0 || i >= hand.length) return;
       ui.selected = ui.selected === i ? null : i;
+      ui.confirmWalk = false;
       return render();
     }
     case 'effort':
@@ -488,6 +497,16 @@ function handle(actName: string, el: HTMLElement | null): void {
       break;
     case 'meatball':
       act({ type: 'pitch', player: v, choice: { card: null } });
+      break;
+    case 'mound':
+      act({ type: 'moundVisit', player: v });
+      break;
+    case 'ibb':
+      if (!ui.confirmWalk) {
+        ui.confirmWalk = true;
+        return render();
+      }
+      act({ type: 'pitch', player: v, choice: { card: null, intentionalWalk: true } });
       break;
     case 'play':
       if (ui.selected === null) return;

@@ -225,6 +225,49 @@ describe('pitching and batting', () => {
   });
 });
 
+describe('pitcher tools and steals', () => {
+  it('an intentional walk puts the batter on, forces runners, and leaves the batter\'s card in hand', () => {
+    let s = structuredClone(start(7));
+    s.sit.bases = [true, false, true];
+    const bid = battingTeam(s);
+    const hand = [...s.players[bid].batting.hand];
+    s = applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: null, intentionalWalk: true } });
+    s = applyAction(s, { type: 'bat', player: bid, choice: { action: 'play', card: 0 } });
+    expect(s.sit.bases).toEqual([true, true, true]);
+    expect(s.lastPlay?.outcome.kind).toBe('intentionalWalk');
+    expect(s.lastPlay?.pitchCard).toBe('ibb');
+    expect(s.lastPlay?.result).toMatch(/Intentional walk/);
+    expect(s.players[bid].batting.hand.slice(0, hand.length)).toEqual(hand);
+    expect(() => applyAction(start(7), { type: 'pitch', player: pitchingTeam(start(7)), choice: { card: null, intentionalWalk: true, maxEffort: true } })).toThrow(IllegalAction);
+  });
+
+  it('a mound visit swaps the hand once per half-inning, only for the pitcher', () => {
+    let s = start(8);
+    const pid = pitchingTeam(s);
+    const drawBefore = [...s.players[pid].pitching.draw];
+    const deckBefore = deckList(s.players[pid].pitching).sort();
+    expect(() => applyAction(s, { type: 'moundVisit', player: battingTeam(s) })).toThrow(IllegalAction);
+    s = applyAction(s, { type: 'moundVisit', player: pid });
+    // The fresh hand takes the whole draw pile first (reshuffling the old hand back in to fill up).
+    expect(s.players[pid].pitching.hand).toHaveLength(5);
+    expect(s.players[pid].pitching.hand).toEqual(expect.arrayContaining(drawBefore));
+    expect(deckList(s.players[pid].pitching).sort()).toEqual(deckBefore);
+    expect(s.moundVisitUsed).toBe(true);
+    expect(() => applyAction(s, { type: 'moundVisit', player: pid })).toThrow(/Already visited/);
+    // Still the pitcher's turn to throw.
+    expect(waitingOn(s)).toContain(pid);
+    // The next half-inning gets a fresh visit.
+    s = autoplay(s, ['veteran', 'veteran'], 8, (g) => g.phase === 'shop');
+    s = applyAction(s, { type: 'endShop', player: s.shop!.order[0] });
+    s = applyAction(s, { type: 'endShop', player: s.shop!.order[1] });
+    expect(s.moundVisitUsed).toBe(false);
+  });
+
+  it('the basic Steal card runs with +1 speed', () => {
+    expect(card('steal')).toMatchObject({ kind: 'tactic', tactic: 'steal', bonus: 1 });
+  });
+});
+
 describe('innings and shopping', () => {
   it('three outs lead to the shop, then the other team bats', () => {
     let s = autoplay(start(3), ['veteran', 'veteran'], 3, (g) => g.phase === 'shop');

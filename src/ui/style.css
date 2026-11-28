@@ -1287,3 +1287,21 @@ button.effort.on .stamina .pip.on {
   margin-top: 6px;
   min-width: 240px;
 }
+
+/* ---------------- pitcher tools */
+.controls .tools {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+.controls .tools button {
+  flex: 1;
+  padding: 5px 6px;
+  font-size: 0.8rem;
+}
+.controls .tools button.confirm {
+  background: var(--bad);
+  border-color: #ff9a97;
+  color: #fff;
+  font-weight: 700;
+}
