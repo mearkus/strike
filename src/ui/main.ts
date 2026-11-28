@@ -6,14 +6,14 @@ import type { Action, DeckName, Difficulty, GameState, PlayerId } from '../engin
 import {
   DIFFICULTY_LABEL,
   esc,
-  fieldHtml,
   handHtml,
-  lastPlayHtml,
   logHtml,
   rulesHtml,
   scoreboardHtml,
+  scoreBugHtml,
   scoutingHtml,
   shopHtml,
+  stageHtml,
 } from './view';
 
 type Mode = 'ai' | 'hotseat';
@@ -44,6 +44,8 @@ interface Ui {
   confirmQuit: boolean;
   /** The pitcher's max-effort toggle for the next pitch. */
   maxEffort: boolean;
+  /** Narrow screens: show the box score / scouting / log panel. */
+  showSide: boolean;
 }
 
 const SAVE_KEY = 'strike.save.v1';
@@ -63,6 +65,7 @@ const ui: Ui = {
   error: null,
   confirmQuit: false,
   maxEffort: false,
+  showSide: false,
 };
 const aiRng = new Rng(randomSeed());
 const root = document.getElementById('app')!;
@@ -179,53 +182,48 @@ function render(): void {
   }
   const a = actor();
   const v = viewer();
-  let center: string;
-  if (g.phase === 'gameOver') center = gameOverHtml(g);
-  else if (a === null) center = `<div class="hand-area"><p class="waiting">${g.phase === 'shop' ? `${esc(g.players[waitingOn(g)[0]].name)} is shopping…` : 'Thinking…'}</p></div>`;
-  else if (v === null) center = passHtml(g, a);
-  else if (g.phase === 'shop') center = shopHtml(g, v, ui.releaseDeck);
-  else center = handHtml(g, v, ui.selected, ui.maxEffort);
+  const animate = ui.animatedKey !== ui.revealKey;
+
+  // The dock at the bottom: your hand, or whatever the game is waiting for.
+  let dock: string;
+  if (g.phase === 'gameOver') dock = gameOverHtml(g);
+  else if (a === null) dock = `<div class="dock-msg"><p class="waiting">${g.phase === 'shop' ? `${esc(g.players[waitingOn(g)[0]].name)} is shopping…` : 'Thinking…'}</p></div>`;
+  else if (v === null) dock = passHtml(g, a);
+  else if (g.phase === 'shop') dock = `<div class="dock-msg"><p class="waiting">Market is open.</p></div>`;
+  else dock = handHtml(g, v, ui.selected, ui.maxEffort);
 
   const scoutFor = v ?? (ui.humans.length === 1 ? ui.humans[0] : null);
+  const shopOpen = g.phase === 'shop' && v !== null;
   root.innerHTML = `
-  <header class="top">
-    <div class="logo">STRIKE<span>⚾</span></div>
-    <div class="actions">
-      <button data-act="rules">How to play</button>
-      <button data-act="quit">New game</button>
-    </div>
-  </header>
-  ${ui.error ? `<div class="error">${esc(ui.error)}</div>` : ''}
-  ${
-    ui.confirmQuit
-      ? `<div class="confirm-bar">Abandon this game? <button class="primary" data-act="quitYes">Yes, new game</button><button data-act="quitNo">Keep playing</button></div>`
-      : ''
-  }
-  ${scoreboardHtml(g)}
-  <div class="board">
-    <div class="col left">
-      ${fieldHtml(g)}
-      ${g.phase === 'pitch' && scoutFor !== null ? scoutingHtml(g, scoutFor) : ''}
-      ${roleHtml(g)}
-    </div>
-    <div class="col center">
-      ${g.phase === 'pitch' || g.phase === 'gameOver' ? lastPlayHtml(g, ui.animatedKey !== ui.revealKey) : ''}
-      ${center}
-    </div>
-    <div class="col right">
-      <div class="panel"><h3>Play-by-play</h3>${logHtml(g)}</div>
-    </div>
+  <div class="table phase-${g.phase}">
+    <header class="bug-bar">
+      <div class="logo">STRIKE<span>⚾</span></div>
+      ${scoreBugHtml(g, animate)}
+      <div class="actions">
+        <button data-act="side" class="side-toggle" aria-expanded="${ui.showSide}">${ui.showSide ? 'Hide log' : 'Log'}</button>
+        <button data-act="rules" title="How to play">Rules</button>
+        <button data-act="quit">New game</button>
+      </div>
+    </header>
+    ${ui.error ? `<div class="error">${esc(ui.error)}</div>` : ''}
+    ${
+      ui.confirmQuit
+        ? `<div class="confirm-bar">Abandon this game? <button class="primary" data-act="quitYes">Yes, new game</button><button data-act="quitNo">Keep playing</button></div>`
+        : ''
+    }
+    <main class="table-main">
+      <section class="stage">${stageHtml(g, animate)}</section>
+      <aside class="side ${ui.showSide ? 'open' : ''}">
+        ${scoreboardHtml(g)}
+        ${g.phase === 'pitch' && scoutFor !== null ? scoutingHtml(g, scoutFor) : ''}
+        <div class="panel log-panel"><h3>Play-by-play</h3>${logHtml(g)}</div>
+      </aside>
+    </main>
+    <footer class="dock">${dock}</footer>
+    ${shopOpen ? `<div class="overlay"><div class="overlay-body">${shopHtml(g, v!, ui.releaseDeck)}</div></div>` : ''}
   </div>
   ${ui.showRules ? `<div class="modal" data-act="rules"><div class="modal-body" data-stop>${rulesHtml()}<button class="primary" data-act="rules">Got it</button></div></div>` : ''}`;
-  if (g.phase === 'pitch' || g.phase === 'gameOver') ui.animatedKey = ui.revealKey;
-}
-
-function roleHtml(g: GameState): string {
-  if (g.phase !== 'pitch') return '';
-  return `<div class="panel roles">
-    <div><span class="mini t-heat">Pitching</span> ${esc(g.players[pitchingTeam(g)].name)}</div>
-    <div><span class="mini t-curve">Batting</span> ${esc(g.players[battingTeam(g)].name)} <span class="muted">(#${g.players[battingTeam(g)].lineupPos + 1} in the order)</span></div>
-  </div>`;
+  ui.animatedKey = ui.revealKey;
 }
 
 function passHtml(g: GameState, a: PlayerId): string {
@@ -381,6 +379,9 @@ function handle(actName: string, el: HTMLElement | null): void {
       return startGame();
     case 'reveal':
       ui.viewer = Number(el!.dataset.p) as PlayerId;
+      return render();
+    case 'side':
+      ui.showSide = !ui.showSide;
       return render();
     case 'relDeck':
       ui.releaseDeck = el!.dataset.deck as DeckName;

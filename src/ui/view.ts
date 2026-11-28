@@ -1,7 +1,7 @@
 import { FOOLED_BY, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
 import { MIN_DECK_SIZE, RELEASE_COST, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
 import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
-import { BALLS_FOR_WALK, STRIKES_FOR_OUT } from '../engine/situation';
+import { BALLS_FOR_WALK, STRIKES_FOR_OUT, advance } from '../engine/situation';
 import type { CardDef, DeckName, Difficulty, GameState, PlayRecord, PlayerId } from '../engine/types';
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -22,16 +22,18 @@ export interface CardOpts {
   dataId?: string;
   footer?: string;
   small?: boolean;
+  /** Smallest variant (no rules text) for the pitch reveal. */
+  mini?: boolean;
 }
 
 export function cardHtml(id: string, o: CardOpts = {}): string {
   const c = card(id);
-  const cls = ['card', c.kind, colorClass(c), o.selected ? 'selected' : '', o.disabled ? 'disabled' : '', o.selectable ? 'selectable' : '', o.small ? 'small' : '']
+  const cls = ['card', c.kind, colorClass(c), o.selected ? 'selected' : '', o.disabled ? 'disabled' : '', o.selectable ? 'selectable' : '', o.small ? 'small' : '', o.mini ? 'tiny' : '']
     .filter(Boolean)
     .join(' ');
   const attrs = o.act && !o.disabled ? `data-act="${o.act}" data-i="${o.index ?? ''}"${o.dataId ? ` data-id="${o.dataId}"` : ''} tabindex="0" role="button"` : '';
   return `<div class="${cls}" ${attrs} title="${esc(c.name)}: ${esc(c.text)}">
-    <div class="card-head"><span class="badge">${headLabel(c)}</span>${c.cost > 0 ? `<span class="cost">${c.cost}★</span>` : ''}</div>
+    <div class="card-head"><span class="badge">${headLabel(c)}</span>${c.cost > 0 && !o.mini ? `<span class="cost">${c.cost}★</span>` : ''}</div>
     <div class="card-name">${esc(c.name)}</div>
     <div class="card-stats">${statsHtml(c)}</div>
     <div class="card-text">${esc(c.text)}</div>
@@ -82,51 +84,135 @@ export function scoreboardHtml(s: GameState): string {
   </table>`;
 }
 
-// ---------------------------------------------------------------- field
+// ---------------------------------------------------------------- score bug
 
-export function fieldHtml(s: GameState): string {
-  const b = s.sit.bases;
-  const base = (x: number, y: number, on: boolean, label: string) =>
-    `<rect x="${x - 11}" y="${y - 11}" width="22" height="22" transform="rotate(45 ${x} ${y})" class="base ${on ? 'on' : ''}"><title>${label}${on ? ': runner' : ''}</title></rect>`;
-  const dots = (n: number, max: number, cls: string) => Array.from({ length: max }, (_, i) => `<span class="dot ${cls} ${i < n ? 'on' : ''}"></span>`).join('');
-  const half = s.half === 'top' ? '▲' : '▼';
-  const seen = s.abPitches.length ? s.abPitches.map((t) => `<span class="mini t-${t}">${TYPE_LABEL[t]}</span>`).join('') : '<span class="muted">none yet</span>';
-  return `<div class="field">
-    <svg viewBox="0 0 200 170" class="diamond" aria-label="Bases">
-      <path d="M100 160 L180 80 L100 10 L20 80 Z" class="infield"/>
-      ${base(180, 80, b[0], 'First')}
-      ${base(100, 14, b[1], 'Second')}
-      ${base(20, 80, b[2], 'Third')}
-      <path d="M90 150 L110 150 L110 160 L100 168 L90 160 Z" class="plate"/>
-    </svg>
-    <div class="situation">
-      <div class="inning">${half} ${ordinal(s.inning)}</div>
-      <div class="count-row"><span class="lbl">B</span>${dots(s.sit.balls, BALLS_FOR_WALK - 1, 'ball')}</div>
-      <div class="count-row"><span class="lbl">S</span>${dots(s.sit.strikes, STRIKES_FOR_OUT - 1, 'strike')}</div>
-      <div class="count-row"><span class="lbl">O</span>${dots(s.sit.outs, 2, 'out')}</div>
-      <div class="seen">This at-bat: ${seen}</div>
+const dots = (n: number, max: number, cls: string) => Array.from({ length: max }, (_, i) => `<span class="dot ${cls} ${i < n ? 'on' : ''}"></span>`).join('');
+
+function miniBases(b: [boolean, boolean, boolean]): string {
+  const d = (x: number, y: number, on: boolean) => `<rect x="${x - 5}" y="${y - 5}" width="10" height="10" transform="rotate(45 ${x} ${y})" class="${on ? 'on' : ''}"/>`;
+  return `<svg viewBox="0 0 40 28" class="mini-bases" aria-label="Runners">${d(32, 16, b[0])}${d(20, 6, b[1])}${d(8, 16, b[2])}</svg>`;
+}
+
+/** Broadcast-style one-line score bug: everything you need between pitches. */
+export function scoreBugHtml(s: GameState, flashRuns: boolean): string {
+  const team = (p: PlayerId) => {
+    const pl = s.players[p];
+    const bat = s.phase === 'pitch' && battingTeam(s) === p;
+    const scored = flashRuns && s.lastPlay && s.lastPlay.runs > 0 && s.lastPlay.batter === p;
+    return `<div class="bug-team ${bat ? 'bat' : ''}" title="${esc(pl.name)}: ${pl.stars} stars to spend">
+      <span class="bug-name">${bat ? '<span class="bat-dot">●</span>' : ''}${esc(pl.name)}</span>
+      <span class="bug-stars">${pl.stars}★</span>
+      <span class="bug-runs ${scored ? 'flash' : ''}">${score(s, p)}</span>
+    </div>`;
+  };
+  const live = s.phase !== 'gameOver';
+  return `<div class="bug">
+    <div class="bug-teams">${team(0)}${team(1)}</div>
+    <div class="bug-inning">${s.half === 'top' ? '▲' : '▼'} ${ordinal(s.inning)}</div>
+    ${miniBases(s.sit.bases)}
+    <div class="bug-count" aria-label="Count">
+      <span class="lbl">B</span>${dots(live ? s.sit.balls : 0, BALLS_FOR_WALK - 1, 'ball')}
+      <span class="lbl">S</span>${dots(live ? s.sit.strikes : 0, STRIKES_FOR_OUT - 1, 'strike')}
+      <span class="lbl">O</span>${dots(live ? Math.min(s.sit.outs, 2) : 0, 2, 'out')}
     </div>
   </div>`;
 }
 
-// ---------------------------------------------------------------- last play
+// ---------------------------------------------------------------- stage (field + last pitch + at-bat)
 
+function diamondHtml(s: GameState, animate: boolean): string {
+  const b = s.sit.bases;
+  const before = s.lastPlay?.situationBefore.bases;
+  const base = (x: number, y: number, i: 0 | 1 | 2, label: string) => {
+    const changed = animate && before && before[i] !== b[i];
+    return `<rect x="${x - 12}" y="${y - 12}" width="24" height="24" transform="rotate(45 ${x} ${y})" class="base ${b[i] ? 'on' : ''} ${changed ? 'changed' : ''}"><title>${label}${b[i] ? ': runner' : ''}</title></rect>`;
+  };
+  return `<svg viewBox="0 0 200 175" class="diamond" aria-label="Bases">
+    <path d="M100 162 L182 82 L100 12 L18 82 Z" class="infield"/>
+    ${base(182, 82, 0, 'First')}
+    ${base(100, 16, 1, 'Second')}
+    ${base(18, 82, 2, 'Third')}
+    <path d="M90 152 L110 152 L110 162 L100 170 L90 162 Z" class="plate"/>
+  </svg>`;
+}
+
+function resultClass(lp: PlayRecord): string {
+  if (lp.runs > 0) return 'runs';
+  if (/Home run|triple|double|Base hit|Bunt single|Ball four|Stolen|wild pitch/.test(lp.result)) return 'good';
+  if (/Strike three|double play|Caught/.test(lp.result)) return 'bad';
+  return '';
+}
+
+/** The last pitch: both cards and what happened. */
 export function lastPlayHtml(s: GameState, animate: boolean): string {
   const lp: PlayRecord | null = s.lastPlay;
-  if (!lp) return `<div class="reveal empty"><p>Choose your card. Both sides pick in secret, then the pitch is revealed.</p></div>`;
+  if (!lp) return `<div class="reveal empty"><p>Both sides pick a card in secret, then the pitch is revealed here.</p></div>`;
   const batCard = lp.batCard
-    ? cardHtml(lp.batCard, { small: true })
-    : `<div class="card small blank"><div class="card-name">${lp.batChoice.action === 'take' ? 'Takes' : 'Hack'}</div><div class="card-text">${lp.batChoice.action === 'take' ? 'No swing.' : 'A swing with no card.'}</div></div>`;
-  const big = lp.runs > 0 ? 'runs' : /Home run|triple|double|Base hit|Bunt single|Ball four|Stolen|wild pitch/.test(lp.result) ? 'good' : /Strike three|double play|Caught/.test(lp.result) ? 'bad' : '';
-  const result = lp.result;
+    ? cardHtml(lp.batCard, { mini: true })
+    : `<div class="card tiny blank"><div class="card-name">${lp.batChoice.action === 'take' ? 'Take' : 'Hack'}</div><div class="card-text">${lp.batChoice.action === 'take' ? 'No swing.' : 'A swing with no card.'}</div></div>`;
   return `<div class="reveal${animate ? ' animate' : ''}">
     <div class="duel">
-      <div class="side"><div class="who">${esc(s.players[lp.pitcher].name)} pitched${lp.maxEffort ? ' <span class="effort-tag">MAX EFFORT</span>' : ''}</div>${cardHtml(lp.pitchCard, { small: true })}</div>
+      <div class="side"><div class="who">${esc(s.players[lp.pitcher].name)}${lp.maxEffort ? ' <span class="effort-tag">MAX EFFORT</span>' : ''}</div>${cardHtml(lp.pitchCard, { mini: true })}</div>
       <div class="vs">vs</div>
-      <div class="side"><div class="who">${esc(s.players[lp.batter].name)} batted</div>${batCard}</div>
+      <div class="side"><div class="who">${esc(s.players[lp.batter].name)}</div>${batCard}</div>
     </div>
-    <div class="result ${big}">${esc(result)}</div>
+    <div class="result ${resultClass(lp)}">${esc(lp.result)}</div>
   </div>`;
+}
+
+const ended = (h: PlayRecord) => advance(h.situationBefore, h.outcome).atBatOver;
+
+/** The pitches of the current at-bat, or of the one that just ended. */
+export function atBatPlays(s: GameState): { plays: PlayRecord[]; current: boolean } {
+  const H = s.history;
+  const i = H.length - 1;
+  if (i < 0) return { plays: [], current: true };
+  let j = ended(H[i]) ? i - 1 : i;
+  while (j >= 0 && !ended(H[j])) j--;
+  return ended(H[i]) ? { plays: H.slice(j + 1, i + 1), current: false } : { plays: H.slice(j + 1), current: true };
+}
+
+function shortOutcome(h: PlayRecord): string {
+  const o = h.outcome;
+  const r = advance(h.situationBefore, o).result;
+  if (r) return ({ walk: 'Walk', strikeout: 'Strikeout', groundout: 'Groundout', doublePlay: 'Double play', popout: 'Popout', flyout: 'Flyout', sacFly: 'Sac fly', single: 'Single', double: 'Double', triple: 'Triple', homeRun: 'Home run', sacrifice: 'Sac bunt', buntHit: 'Bunt hit', buntOut: 'Bunt out' } as Record<string, string>)[r];
+  if (o.kind === 'ball') return o.wild ? 'Wild pitch' : o.dirt ? 'In the dirt' : o.checkSwing ? 'Checked swing' : 'Ball';
+  return ({ calledStrike: 'Called strike', swingingStrike: 'Swinging strike', foul: 'Foul', buntFoul: 'Foul bunt' } as Record<string, string>)[o.kind] ?? o.kind;
+}
+
+/** Pitch-by-pitch list of the current at-bat. */
+export function atBatHtml(s: GameState): string {
+  const { plays, current } = atBatPlays(s);
+  const who = plays.length ? s.players[plays[0].batter].name : s.players[battingTeam(s)].name;
+  const rows = plays
+    .map((h, k) => {
+      const p = card(h.pitchCard);
+      const type = p.kind === 'pitch' ? p.type : 'any';
+      const after = advance(h.situationBefore, h.outcome).sit;
+      const bat = h.batCard ? card(h.batCard).name : h.batChoice.action === 'take' ? 'Take' : 'Hack';
+      const count = advance(h.situationBefore, h.outcome).atBatOver ? '' : `<span class="ab-count">${after.balls}-${after.strikes}</span>`;
+      return `<li class="${k === plays.length - 1 ? 'latest' : ''}"><span class="ab-n">${k + 1}</span><span class="mini t-${type}">${esc(card(h.pitchCard).name)}${h.maxEffort ? ' 🔥' : ''}</span><span class="ab-bat">${esc(bat)}</span><b class="ab-out">${shortOutcome(h)}</b>${count}</li>`;
+    })
+    .join('');
+  return `<div class="atbat">
+    <h3>${current ? 'This at-bat' : 'Last at-bat'} <span class="muted">· ${esc(who)}</span></h3>
+    ${rows ? `<ol>${rows}</ol>` : '<p class="muted">No pitches yet.</p>'}
+  </div>`;
+}
+
+export function rolesHtml(s: GameState): string {
+  if (s.phase !== 'pitch') return '';
+  const b = battingTeam(s);
+  return `<div class="roles"><span class="mini t-heat">Pitching</span> ${esc(s.players[pitchingTeam(s)].name)} <span class="mini t-curve">Batting</span> ${esc(s.players[b].name)} <span class="muted">#${s.players[b].lineupPos + 1}</span></div>`;
+}
+
+/** The middle of the table: field, last pitch and at-bat tracker. */
+export function stageHtml(s: GameState, animate: boolean): string {
+  return `<div class="stage-top">
+      <div class="stage-field">${diamondHtml(s, animate)}${rolesHtml(s)}</div>
+      <div class="stage-play">${lastPlayHtml(s, animate)}</div>
+    </div>
+    ${atBatHtml(s)}`;
 }
 
 export function logHtml(s: GameState): string {
@@ -195,13 +281,15 @@ export function deckSummaryHtml(s: GameState, p: PlayerId, deck: DeckName): stri
 // ---------------------------------------------------------------- hand & controls
 
 const tiredCount = (ids: string[]) => ids.filter((id) => id === 'tiredArm').length;
+/** Two human players: label whose hand this is. */
+const ui2 = (s: GameState) => !s.players[0].ai && !s.players[1].ai;
 
 export function handHtml(s: GameState, viewer: PlayerId, selected: number | null, maxEffort = false): string {
   const pitching = pitchingTeam(s) === viewer;
   const pl = s.players[viewer];
   const pile = pitching ? pl.pitching : pl.batting;
   const waiting = pitching ? !s.pending.pitch : !s.pending.bat;
-  if (!waiting) return `<div class="hand-area"><p class="waiting">Waiting for ${esc(s.players[(1 - viewer) as PlayerId].name)}…</p></div>`;
+  if (!waiting) return `<div class="dock-msg"><p class="waiting">Waiting for ${esc(s.players[(1 - viewer) as PlayerId].name)}…</p></div>`;
 
   const cards = pile.hand
     .map((id, i) => {
@@ -218,18 +306,20 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
       pile.hand.length === 0
         ? `<button class="primary" data-act="meatball">Out of cards: groove a Tired Arm fastball</button>`
         : `<button class="primary" data-act="throw" ${sel ? '' : 'disabled'}>${sel ? `Throw ${esc(sel.name)}${maxEffort ? ' with max effort' : ''}` : 'Pick a pitch'}</button>
-      <button class="effort ${maxEffort ? 'on' : ''}" data-act="effort" aria-pressed="${maxEffort}" title="+${MAX_EFFORT_STUFF} stuff on this pitch, but a Tired Arm is shuffled into your draw pile. (E)">🔥 Max effort: ${maxEffort ? 'ON' : 'off'}</button>`;
+      <button class="effort ${maxEffort ? 'on' : ''}" data-act="effort" aria-pressed="${maxEffort}" title="+${MAX_EFFORT_STUFF} stuff on this pitch, but a Tired Arm is shuffled into your draw pile. (E)">🔥 Max effort ${maxEffort ? 'ON' : 'off'}</button>`;
   } else {
     const sel = selected !== null ? card(pile.hand[selected]) : null;
-    const verb = sel ? (sel.kind === 'swing' ? `Swing: ${esc(sel.name)}` : `Play ${esc(sel.name)}`) : 'Pick a card to swing';
+    const verb = sel ? (sel.kind === 'swing' ? `Swing: ${esc(sel.name)}` : `Play ${esc(sel.name)}`) : 'Pick a card';
     controls = `<button class="primary" data-act="play" ${sel ? '' : 'disabled'}>${verb}</button>
       <button data-act="take" title="Don't swing. Strike-zone pitches are strikes; chase pitches are balls.">Take</button>
-      <button data-act="hack" title="Swing without spending a card: contact -1, power 0, sit any.">Hack (no card)</button>`;
+      <button data-act="hack" title="Swing without spending a card: contact -1, power 0, sit any.">Hack</button>`;
   }
   return `<div class="hand-area">
-    <div class="hand-head"><h3>${esc(pl.name)}: your ${pitching ? 'pitching' : 'batting'} hand</h3>${deckSummaryHtml(s, viewer, pitching ? 'pitching' : 'batting')}${pitching ? fatigueHtml(deckList(pl.pitching)) : ''}</div>
-    <div class="hand">${cards || '<p class="muted">No cards in hand.</p>'}</div>
-    <div class="controls">${controls}</div>
+    <div class="hand-head"><h3>${pitching ? 'Your pitch' : 'Your swing'}${ui2(s) ? ` <span class="muted">(${esc(pl.name)})</span>` : ''}</h3>${deckSummaryHtml(s, viewer, pitching ? 'pitching' : 'batting')}${pitching ? fatigueHtml(deckList(pl.pitching)) : ''}<span class="keys muted">${pitching ? 'Keys: 1-5 pick · E effort · Enter throw' : 'Keys: 1-9 pick · Enter swing · T take'}</span></div>
+    <div class="dock-body">
+      <div class="hand">${cards || '<p class="muted">No cards in hand.</p>'}</div>
+      <div class="controls">${controls}</div>
+    </div>
   </div>`;
 }
 

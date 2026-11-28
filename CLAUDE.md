@@ -44,5 +44,8 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
   with exploitation of observed tendencies; shop logic.
 - Tuning note: the AI's count values feed back into how often it takes pitches, so after a
   rules change, calibrate, re-run the sim, and repeat until the tables stop moving.
-- `ui/main.ts`: controller (AI turns, hot-seat privacy, localStorage autosave);
-  `ui/view.ts`: pure HTML-string renderers; `ui/style.css`.
+- `ui/main.ts`: controller (AI turns, hot-seat privacy, localStorage autosave) and the
+  single-screen table layout: score bug (top), stage with field, last pitch and at-bat
+  tracker (middle), hand dock (bottom), box score/scouting/log side panel, market overlay.
+  `ui/view.ts`: pure HTML-string renderers; `ui/style.css`. On desktop and tablets the page
+  must not scroll; keep new UI inside those regions.
