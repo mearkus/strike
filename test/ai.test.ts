@@ -103,6 +103,19 @@ describe('AI choices', () => {
     for (let i = 0; i < 30; i++) expect(choosePitch(game, 1, d, rng).intentionalWalk).toBeFalsy();
   });
 
+  it('the AI never tries to walk a batter on purpose with first base occupied (no walking in runs forever)', () => {
+    // The state that once looped: bases loaded, two outs, a hand of Tired Arms and no stamina.
+    const g = structuredClone(game);
+    g.sit = { bases: [true, true, true], outs: 2, balls: 0, strikes: 0 };
+    g.players[1].pitching.hand = ['tunnelChange', 'tiredArm', 'tiredArm', 'tiredArm', 'tiredArm'];
+    g.players[1].stamina = 0;
+    g.players[0].batting.draw = ['barrel', 'clutch', 'barrel', 'stayBack'];
+    for (const d of ['veteran', 'allstar'] as const) {
+      const rng = new Rng(9);
+      for (let i = 0; i < 10; i++) expect(choosePitch(g, 1, d, rng).intentionalWalk).toBeFalsy();
+    }
+  });
+
   it('the AI takes a mound visit when its hand is all Tired Arms but its deck is strong', () => {
     const g = structuredClone(game);
     const pile = g.players[1].pitching;

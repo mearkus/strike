@@ -43,7 +43,7 @@ The in-game **How to play** button has the full rules.
 ### Specific counters
 
 - **Pitchout** throws out any stealer; steals are easier on Breaking and Offspeed, and the basic Steal card runs with +1 speed.
-- Pitchers have two free tools: a **mound visit** (once per half-inning, throw back the hand and draw a fresh one) and the **intentional walk** (put the batter on to set up a force or a double play).
+- Pitchers have two free tools: a **mound visit** (once per half-inning, throw back the hand and draw a fresh one) and the **intentional walk** (with first base open, put the batter on to set up a force or a double play).
 - **Sinkers** cause double plays; **Hit & Run** prevents them.
 - **Deceptive** chase pitches (Sweeper, Splitter) allow no check swing; **Good Eye** pays off against chase-heavy pitchers.
 - **Tunnel Change** gets nastier after Heat; **Timed Up** punishes a pitcher who repeats a type.

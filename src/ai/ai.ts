@@ -41,9 +41,9 @@ const IBB_MARGIN = 0.02;
 /** Take a mound visit only when a fresh hand looks at least this many runs better. */
 const MOUND_VISIT_MARGIN = 0.03;
 
-/** Run value (to the batting side) of an intentional walk right now. */
+/** Run value (to the batting side) of an intentional walk right now; Infinity when it isn't allowed. */
 function intentionalWalkValue(s: GameState): number {
-  return outcomeValue(s.sit, { kind: 'intentionalWalk' });
+  return s.sit.bases[0] ? Infinity : outcomeValue(s.sit, { kind: 'intentionalWalk' });
 }
 
 /** The Veteran's picture of a hitter: its prior, blended with what it has seen once it has seen enough. */
@@ -405,7 +405,9 @@ export function choosePitch(s: GameState, me: PlayerId, difficulty: Difficulty, 
   // All-Star: equilibrium play, leaning toward exploiting observed tendencies.
   const neg = M.map((row, i) => row.map((v) => -v - penalty[i]));
   const eq = solveZeroSum(neg);
-  if (walk < -eq.value - IBB_MARGIN) return { card: null, intentionalWalk: true };
+  // The equilibrium value assumes the hitter holds whichever card hurts most, which overrates
+  // walking him; judge the walk against a realistic picture of his hand instead.
+  if (walk < -Math.max(...util(veteranBatModel(s, opp, bats))) - IBB_MARGIN) return { card: null, intentionalWalk: true };
   let strategy = eq.row;
   const t = tendencies(s, opp, 'bat');
   if (t.samples >= ALLSTAR_SCOUTING_PITCHES) {

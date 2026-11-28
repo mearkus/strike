@@ -194,6 +194,9 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (s.pending.pitch) fail('Pitch already chosen');
       if (action.choice.intentionalWalk) {
         if (action.choice.maxEffort) fail('No max effort on an intentional walk');
+        // As in real baseball, a walk on purpose is for setting up a force with first base open.
+        // (It also means a pitcher can't walk in runs forever without throwing a card.)
+        if (s.sit.bases[0]) fail('Intentional walks only with first base open');
         s.pending.pitch = { card: null, intentionalWalk: true };
         break;
       }

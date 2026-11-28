@@ -228,12 +228,14 @@ describe('pitching and batting', () => {
 describe('pitcher tools and steals', () => {
   it('an intentional walk puts the batter on, forces runners, and leaves the batter\'s card in hand', () => {
     let s = structuredClone(start(7));
-    s.sit.bases = [true, false, true];
+    s.sit.bases = [false, true, true];
     const bid = battingTeam(s);
     const hand = [...s.players[bid].batting.hand];
     s = applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: null, intentionalWalk: true } });
     s = applyAction(s, { type: 'bat', player: bid, choice: { action: 'play', card: 0 } });
     expect(s.sit.bases).toEqual([true, true, true]);
+    // With first base now taken, no more walks on purpose: the pitcher has to throw.
+    expect(() => applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: null, intentionalWalk: true } })).toThrow(/first base open/);
     expect(s.lastPlay?.outcome.kind).toBe('intentionalWalk');
     expect(s.lastPlay?.pitchCard).toBe('ibb');
     expect(s.lastPlay?.result).toMatch(/Intentional walk/);
