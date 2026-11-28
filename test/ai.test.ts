@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardRating, chooseBat, choosePitch, fatigueCost, solveZeroSum, staminaCost } from '../src/ai/ai';
+import { cardRating, chooseBat, choosePitch, fatigueCost, shouldVisitMound, solveZeroSum, staminaCost } from '../src/ai/ai';
 import { outcomeValue, situationValue } from '../src/ai/value';
 import { pitchCard } from '../src/engine/cards';
 import { isBatChoiceLegal, legalPitchChoices, newGame } from '../src/engine/game';
@@ -96,6 +96,36 @@ describe('AI choices', () => {
     const fresh = structuredClone(game);
     fresh.players[1].pitching.hand = [...patient.players[1].pitching.hand];
     expect(zoneRate(patient)).toBeGreaterThan(zoneRate(fresh) + 0.1);
+  });
+
+  it.each(['veteran', 'allstar'] as const)('%s never walks a batter on purpose with the bases empty at 0-0', (d) => {
+    const rng = new Rng(4);
+    for (let i = 0; i < 30; i++) expect(choosePitch(game, 1, d, rng).intentionalWalk).toBeFalsy();
+  });
+
+  it('the AI never tries to walk a batter on purpose with first base occupied (no walking in runs forever)', () => {
+    // The state that once looped: bases loaded, two outs, a hand of Tired Arms and no stamina.
+    const g = structuredClone(game);
+    g.sit = { bases: [true, true, true], outs: 2, balls: 0, strikes: 0 };
+    g.players[1].pitching.hand = ['tunnelChange', 'tiredArm', 'tiredArm', 'tiredArm', 'tiredArm'];
+    g.players[1].stamina = 0;
+    g.players[0].batting.draw = ['barrel', 'clutch', 'barrel', 'stayBack'];
+    for (const d of ['veteran', 'allstar'] as const) {
+      const rng = new Rng(9);
+      for (let i = 0; i < 10; i++) expect(choosePitch(g, 1, d, rng).intentionalWalk).toBeFalsy();
+    }
+  });
+
+  it('the AI takes a mound visit when its hand is all Tired Arms but its deck is strong', () => {
+    const g = structuredClone(game);
+    const pile = g.players[1].pitching;
+    pile.hand = ['tiredArm', 'tiredArm', 'tiredArm', 'tiredArm', 'tiredArm'];
+    pile.draw = ['hammer', 'gas', 'cutter', 'paintedHeater', 'backdoor', 'heavySinker'];
+    pile.discard = [];
+    expect(shouldVisitMound(g, 1, 'veteran', new Rng(2))).toBe(true);
+    g.moundVisitUsed = true;
+    expect(shouldVisitMound(g, 1, 'veteran', new Rng(2))).toBe(false);
+    expect(shouldVisitMound(structuredClone(game), 1, 'rookie', new Rng(2))).toBe(false);
   });
 
   it('rates premium cards above starters', () => {

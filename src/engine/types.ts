@@ -102,10 +102,14 @@ export type PitchOutcome =
   | { kind: 'sacrifice' }
   | { kind: 'buntHit' }
   | { kind: 'buntOut' }
-  | { kind: 'buntFoul' };
+  | { kind: 'buntFoul' }
+  | { kind: 'intentionalWalk' };
 
-/** `card: null` throws a Tired Arm when the hand is empty. Max effort adds stuff and fatigue. */
-export type PitchChoice = { card: number | null; maxEffort?: boolean };
+/**
+ * `card: null` throws a Tired Arm when the hand is empty. Max effort adds stuff and fatigue.
+ * `intentionalWalk` skips the pitch entirely and puts the batter on first (`card` is ignored).
+ */
+export type PitchChoice = { card: number | null; maxEffort?: boolean; intentionalWalk?: boolean };
 
 export type BatChoice =
   | { action: 'take' }
@@ -192,6 +196,8 @@ export interface GameState {
   abPitches: ThrownType[];
   phase: 'pitch' | 'shop' | 'gameOver';
   pending: { pitch?: PitchChoice; bat?: BatChoice };
+  /** The pitching side has used its mound visit this half-inning (missing in older saves). */
+  moundVisitUsed?: boolean;
   shop: ShopState | null;
   market: { row: string[]; supply: string[] };
   lastPlay: PlayRecord | null;
@@ -206,4 +212,6 @@ export type Action =
   | { type: 'bat'; player: PlayerId; choice: BatChoice }
   | { type: 'buy'; player: PlayerId; marketIndex: number }
   | { type: 'release'; player: PlayerId; deck: DeckName; cardId: string }
-  | { type: 'endShop'; player: PlayerId };
+  | { type: 'endShop'; player: PlayerId }
+  /** Once per half-inning, before choosing a pitch: throw back the hand and draw a fresh one. */
+  | { type: 'moundVisit'; player: PlayerId };

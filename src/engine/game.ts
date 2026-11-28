@@ -192,6 +192,14 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (s.phase !== 'pitch') fail('Not pitching now');
       if (action.player !== pitchingTeam(s)) fail('Not your turn to pitch');
       if (s.pending.pitch) fail('Pitch already chosen');
+      if (action.choice.intentionalWalk) {
+        if (action.choice.maxEffort) fail('No max effort on an intentional walk');
+        // As in real baseball, a walk on purpose is for setting up a force with first base open.
+        // (It also means a pitcher can't walk in runs forever without throwing a card.)
+        if (s.sit.bases[0]) fail('Intentional walks only with first base open');
+        s.pending.pitch = { card: null, intentionalWalk: true };
+        break;
+      }
       if (!legalPitchChoices(s).includes(action.choice.card)) fail('Illegal pitch');
       if (action.choice.maxEffort && action.choice.card === null) fail('No max effort on a Tired Arm with an empty hand');
       if (action.choice.maxEffort && s.players[action.player].stamina <= 0) fail('No stamina left for max effort');
@@ -237,6 +245,19 @@ export function applyAction(prev: GameState, action: Action): GameState {
       log(s, `${verb(p.name, 'releases')} ${card(action.cardId).name}.`);
       break;
     }
+    case 'moundVisit': {
+      if (s.phase !== 'pitch') fail('Not pitching now');
+      if (action.player !== pitchingTeam(s)) fail('Only the pitcher can visit the mound');
+      if (s.pending.pitch) fail('Pitch already chosen');
+      if (s.moundVisitUsed) fail('Already visited the mound this half-inning');
+      const pile = s.players[action.player].pitching;
+      pile.discard.push(...pile.hand);
+      pile.hand = [];
+      drawCards(pile, PITCH_HAND_SIZE, rng);
+      s.moundVisitUsed = true;
+      log(s, `Mound visit for ${s.players[action.player].name}: a fresh hand.`);
+      break;
+    }
     case 'endShop': {
       const shopper = currentShopper(s) ?? fail('Not shopping');
       if (shopper !== action.player) fail('Not your turn to shop');
@@ -273,6 +294,8 @@ function resolve(s: GameState, rng: Rng): void {
   const batter = s.players[bid];
   const pc = s.pending.pitch!;
   const bc = s.pending.bat!;
+
+  if (pc.intentionalWalk) return resolveIntentionalWalk(s, rng);
 
   let pitchId = MEATBALL;
   if (pc.card !== null) {
@@ -353,6 +376,51 @@ function resolve(s: GameState, rng: Rng): void {
   }
 }
 
+/** The pitcher puts the batter on first without a pitch. Any card the batter picked goes back. */
+function resolveIntentionalWalk(s: GameState, rng: Rng): void {
+  const pid = pitchingTeam(s);
+  const bid = battingTeam(s);
+  const pitcher = s.players[pid];
+  const batter = s.players[bid];
+  const bc = s.pending.bat!;
+  const outcome: PitchOutcome = { kind: 'intentionalWalk' };
+  const before = structuredClone(s.sit);
+  const adv = advance(s.sit, outcome);
+  awardStars(s, adv, pid, bid);
+  batter.runsByInning[s.inning - 1] += adv.runs;
+  const result = outcomeText(outcome, adv);
+  const text = `${pitcher.name === 'You' ? 'You put' : `${pitcher.name} puts`} the batter on: ${result}`;
+  s.lastPlay = {
+    inning: s.inning,
+    half: s.half,
+    pitcher: pid,
+    batter: bid,
+    pitchCard: 'ibb',
+    maxEffort: false,
+    landed: 'chase',
+    batChoice: bc,
+    batCard: null,
+    outcome,
+    runs: adv.runs,
+    text,
+    result,
+    moves: adv.moves,
+    situationBefore: before,
+  };
+  s.history.push(s.lastPlay);
+  log(s, text, adv.runs);
+  s.sit = adv.sit;
+  s.pending = {};
+  s.abPitches = [];
+  batter.lineupPos = (batter.lineupPos + 1) % 9;
+  if (s.half === 'bottom' && s.inning >= s.config.innings && score(s, 1) > score(s, 0)) {
+    endGame(s, 1, `Walk-off! ${verb(s.players[1].name, 'wins')}.`);
+    return;
+  }
+  refill(pitcher.pitching, PITCH_HAND_SIZE, rng);
+  refill(batter.batting, BAT_HAND_SIZE, rng);
+}
+
 function awardStars(s: GameState, adv: AdvanceResult, pid: PlayerId, bid: PlayerId): void {
   const outs = (adv.inningOver ? 3 : adv.sit.outs) - s.sit.outs;
   let p = outs;
@@ -417,6 +485,7 @@ function startNextHalf(s: GameState, rng: Rng): void {
   }
   s.phase = 'pitch';
   s.shop = null;
+  s.moundVisitUsed = false;
   s.sit = freshSituation();
   s.abPitches = [];
   const bid = battingTeam(s);
@@ -458,7 +527,8 @@ const RESULT_TEXT: Record<string, string> = {
 export function outcomeText(outcome: PitchOutcome, adv: AdvanceResult): string {
   const parts: string[] = [];
   if (adv.steal) parts.push(adv.steal.result === 'safe' ? `Stolen base: safe at ${ordinal(adv.steal.to)}!` : `Caught stealing ${ordinal(adv.steal.to)}!`);
-  if (adv.result) parts.push(RESULT_TEXT[adv.result]);
+  if (outcome.kind === 'intentionalWalk') parts.push('Intentional walk.');
+  else if (adv.result) parts.push(RESULT_TEXT[adv.result]);
   else if (!adv.inningOver || !adv.steal) {
     parts.push(
       {
@@ -471,6 +541,7 @@ export function outcomeText(outcome: PitchOutcome, adv: AdvanceResult): string {
         sacrifice: '',
         buntHit: '',
         buntOut: '',
+        intentionalWalk: '',
       }[outcome.kind],
     );
   }

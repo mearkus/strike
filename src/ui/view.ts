@@ -1,4 +1,4 @@
-import { FOOLED_BY, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
+import { FOOLED_BY, PITCH_HAND_SIZE, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
 import { ECONOMY, MIN_DECK_SIZE, RELEASE_COST, STAMINA, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
 import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, READ_QUALITY_BONUS, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK, STRIKES_FOR_OUT, advance } from '../engine/situation';
@@ -299,7 +299,7 @@ export function atBatHtml(s: GameState): string {
       const p = card(h.pitchCard);
       const type = p.kind === 'pitch' ? p.type : 'any';
       const after = advance(h.situationBefore, h.outcome).sit;
-      const bat = h.batCard ? card(h.batCard).name : h.batChoice.action === 'take' ? 'Take' : 'Hack';
+      const bat = h.outcome.kind === 'intentionalWalk' ? '—' : h.batCard ? card(h.batCard).name : h.batChoice.action === 'take' ? 'Take' : 'Hack';
       const count = advance(h.situationBefore, h.outcome).atBatOver ? '' : `<span class="ab-count">${after.balls}-${after.strikes}</span>`;
       return `<li class="${k === plays.length - 1 ? 'latest' : ''}"><span class="ab-n">${k + 1}</span><span class="mini t-${type}">${esc(card(h.pitchCard).name)}${h.maxEffort ? ' 🔥' : ''}</span><span class="ab-bat">${esc(bat)}</span><b class="ab-out">${shortOutcome(h)}</b>${count}</li>`;
     })
@@ -432,7 +432,7 @@ const tiredCount = (ids: string[]) => ids.filter((id) => id === 'tiredArm').leng
 /** Two human players: label whose hand this is. */
 const ui2 = (s: GameState) => !s.players[0].ai && !s.players[1].ai;
 
-export function handHtml(s: GameState, viewer: PlayerId, selected: number | null, maxEffort = false): string {
+export function handHtml(s: GameState, viewer: PlayerId, selected: number | null, maxEffort = false, confirmWalk = false): string {
   const pitching = pitchingTeam(s) === viewer;
   const pl = s.players[viewer];
   const pile = pitching ? pl.pitching : pl.batting;
@@ -459,6 +459,10 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
           ? `<button class="effort ${maxEffort ? 'on' : ''}" data-act="effort" aria-pressed="${maxEffort}" title="+${MAX_EFFORT_STUFF} stuff on this pitch. Spends 1 stamina and shuffles a Tired Arm into your draw pile. (E)">🔥 Max effort ${maxEffort ? 'ON' : 'off'} ${staminaPips(pl.stamina)}</button>`
           : `<button class="effort" disabled title="Out of stamina. Throw an Easy pitch or release a Tired Arm in the market to win some back.">🔥 Out of stamina ${staminaPips(0)}</button>`
       }`;
+    controls += `<div class="tools">
+      <button data-act="mound" ${s.moundVisitUsed ? 'disabled' : ''} title="Once per half-inning: throw back your hand and draw ${PITCH_HAND_SIZE} fresh cards. You still pitch after.">${s.moundVisitUsed ? 'Mound visit used' : 'Mound visit'}</button>
+      <button data-act="ibb" class="${confirmWalk ? 'confirm' : ''}" ${s.sit.bases[0] ? 'disabled' : ''} title="${s.sit.bases[0] ? 'Only with first base open.' : 'Put the batter on first without throwing a pitch, to set up a force or a double play.'}">${confirmWalk ? 'Confirm: walk him' : 'Intentional walk'}</button>
+    </div>`;
   } else {
     const sel = selected !== null ? card(pile.hand[selected]) : null;
     const verb = sel ? (sel.kind === 'swing' ? `Swing: ${esc(sel.name)}` : `Play ${esc(sel.name)}`) : 'Pick a card';
@@ -568,8 +572,9 @@ export function rulesHtml(): string {
   <ul>
     <li>Singles score runners from 2nd and 3rd; doubles score everyone but the runner from 1st, who goes to 3rd.</li>
     <li>Fly balls score a runner from 3rd with less than two outs (sac fly). Grounders move runners up but can turn two.</li>
-    <li><b>Steal</b> cards send the lead runner (easier against Breaking/Offspeed, harder stealing 3rd). <b>Bunts</b> sacrifice runners over, or try for a hit. <b>Hit &amp; Run</b> sends the runner on contact.</li>
+    <li><b>Steal</b> cards send the lead runner: roll a d6 plus the card's speed (+1 on the basic Steal), +1 against Breaking or Offspeed, −1 stealing 3rd; 4 or more is safe. <b>Bunts</b> sacrifice runners over, or try for a hit. <b>Hit &amp; Run</b> sends the runner on contact.</li>
     <li>Extra innings start with a runner on 2nd.</li>
+    <li>Pitchers have two free tools: a <b>mound visit</b> (once per half-inning, throw back your hand and draw a fresh one before you pitch) and the <b>intentional walk</b> (with first base open, put the batter on first without a pitch, to set up a force or a double play).</li>
   </ul>
   <h3>Building your deck</h3>
   <ul>

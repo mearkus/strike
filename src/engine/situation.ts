@@ -137,6 +137,10 @@ export function advance(before: Situation, outcome: PitchOutcome): AdvanceResult
         result = 'walk';
       }
       break;
+    case 'intentionalWalk':
+      force();
+      result = 'walk';
+      break;
     case 'calledStrike':
     case 'swingingStrike':
     case 'buntFoul':

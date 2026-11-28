@@ -40,6 +40,9 @@ export const CARDS: Record<string, CardDef> = Object.fromEntries(
     pitch({ id: 'eephus', name: 'Eephus', type: 'change', zone: 'strike', stuff: 0, control: 6, cost: 2, effects: ['eephus', 'easy'], text: 'Easy. A 50 mph rainbow: read bonuses and penalties are doubled.' }),
     pitch({ id: 'knuckleball', name: 'Knuckleball', type: 'knuckle', zone: 'strike', stuff: 2, control: 2, cost: 4, effects: ['easy'], text: 'Easy. No type, so no batter can sit on it, but it goes where it wants.' }),
 
+    // ---------- Not a real pitch: shown when a pitcher issues an intentional walk ----------
+    pitch({ id: 'ibb', name: 'Intentional Walk', type: 'heat', zone: 'chase', stuff: 0, control: 6, cost: 0, text: 'Four wide ones. The batter takes first.' }),
+
     // ---------- Pitching: junk ----------
     pitch({ id: 'tiredArm', name: 'Tired Arm', type: 'heat', zone: 'strike', stuff: -1, control: 2, cost: 0, effects: ['meatball'], text: 'Fatigue: flat, wild and hittable. You gain one after every half-inning you pitch and every Max Effort pitch.' }),
 
@@ -49,7 +52,7 @@ export const CARDS: Record<string, CardDef> = Object.fromEntries(
     swing({ id: 'sitCurve', name: 'Sit Breaking', sit: 'curve', contact: 0, power: 1, cost: 1, text: 'Wait on the breaking ball.' }),
     swing({ id: 'sitChange', name: 'Sit Offspeed', sit: 'change', contact: 0, power: 1, cost: 1, text: 'Stay back on the changeup.' }),
     tactic({ id: 'bunt', name: 'Bunt', tactic: 'bunt', bonus: 0, cost: 1, text: 'With runners on and <2 outs: sacrifice them over. Otherwise bunt for a hit.' }),
-    tactic({ id: 'steal', name: 'Steal', tactic: 'steal', bonus: 0, cost: 1, text: 'Take the pitch; the lead runner tries to steal. Easier on non-Heat.' }),
+    tactic({ id: 'steal', name: 'Steal', tactic: 'steal', bonus: 1, cost: 1, text: 'Take the pitch; the lead runner steals with +1 speed. Easier on non-Heat.' }),
 
     // ---------- Batting: market ----------
     swing({ id: 'moonshot', name: 'Moonshot', sit: 'heat', contact: 0, power: 3, cost: 5, text: 'Sell out for the fastball.' }),
