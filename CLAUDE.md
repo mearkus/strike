@@ -52,3 +52,7 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
   market overlay. `render()` preserves scroll positions across re-renders.
   `ui/view.ts`: pure HTML-string renderers; `ui/style.css`. On desktop and tablets the page
   must not scroll; keep new UI inside those regions.
+- `ui/tutorial.ts`: the interactive tutorial. Each step builds a game state, asks for one
+  action, scripts the opponent's answer, and searches seeds (`playScripted`) so the lesson's
+  outcome happens. `test/tutorial.test.ts` plays every lesson; if you change rules or cards,
+  run it to make sure the lessons still work and their text still matches what happens.
