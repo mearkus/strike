@@ -1194,3 +1194,27 @@ button.effort.on {
   color: #ff8a65;
   font-weight: 700;
 }
+
+.stamina {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.stamina .pip {
+  width: 9px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1.5px solid #ff8a65;
+  display: inline-block;
+}
+.stamina .pip.on {
+  background: var(--heat);
+  border-color: var(--heat);
+}
+button.effort.on .stamina .pip {
+  border-color: #fff;
+}
+button.effort.on .stamina .pip.on {
+  background: #fff;
+}

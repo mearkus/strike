@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardRating, chooseBat, choosePitch, fatigueCost, solveZeroSum } from '../src/ai/ai';
+import { cardRating, chooseBat, choosePitch, fatigueCost, solveZeroSum, staminaCost } from '../src/ai/ai';
 import { outcomeValue, situationValue } from '../src/ai/value';
 import { isBatChoiceLegal, legalPitchChoices, newGame } from '../src/engine/game';
 import { Rng } from '../src/engine/rng';
@@ -47,6 +47,27 @@ describe('AI choices', () => {
       expect(legalPitchChoices(game)).toContain(choosePitch(game, 1, d, rng).card);
       expect(isBatChoiceLegal(game, chooseBat(game, 0, d, rng))).toBe(true);
     }
+  });
+
+  it.each(['rookie', 'veteran', 'allstar'] as const)('%s never goes max effort without stamina', (d) => {
+    const g = structuredClone(game);
+    g.players[1].stamina = 0;
+    const rng = new Rng(3);
+    for (let i = 0; i < 40; i++) expect(choosePitch(g, 1, d, rng).maxEffort).toBeFalsy();
+  });
+
+  it('stamina is dearer when it is scarce', () => {
+    // Late in the game, with only a few big spots left to save it for.
+    const late = structuredClone(game);
+    late.inning = late.config.innings;
+    late.sit.outs = 1;
+    const scarce = structuredClone(late);
+    scarce.players[1].stamina = 1;
+    const plenty = structuredClone(late);
+    plenty.players[1].stamina = 3;
+    expect(staminaCost(scarce, 1)).toBeGreaterThan(staminaCost(plenty, 1));
+    scarce.players[1].stamina = 0;
+    expect(staminaCost(scarce, 1)).toBe(Infinity);
   });
 
   it('fatigue matters less as the game runs out', () => {

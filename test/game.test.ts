@@ -4,6 +4,7 @@ import { BAT_HAND_SIZE, PITCH_HAND_SIZE, STARTER_BATTING, STARTER_PITCHING, card
 import {
   IllegalAction,
   MIN_DECK_SIZE,
+  STAMINA,
   applyAction,
   battingTeam,
   deckList,
@@ -113,6 +114,39 @@ describe('pitching and batting', () => {
     if (s.history.length === 1 && !s.lastPlay?.result.includes('Strike three')) expect(pile.draw.length).toBe(drawBefore + 1);
   });
 
+  it('max effort spends stamina and is illegal with none left', () => {
+    let s = start(4);
+    const pid = pitchingTeam(s);
+    expect(s.players[pid].stamina).toBe(STAMINA);
+    s = applyAction(s, { type: 'pitch', player: pid, choice: { card: 0, maxEffort: true } });
+    s = applyAction(s, { type: 'bat', player: battingTeam(s), choice: { action: 'take' } });
+    expect(s.players[pid].stamina).toBe(STAMINA - 1);
+    expect(s.lastPlay?.result).toMatch(new RegExp(`stamina ${STAMINA - 1}/${STAMINA}`));
+
+    const empty = structuredClone(s);
+    empty.players[pitchingTeam(empty)].stamina = 0;
+    expect(() => applyAction(empty, { type: 'pitch', player: pitchingTeam(empty), choice: { card: 0, maxEffort: true } })).toThrow(/stamina/);
+    // A normal pitch is still fine.
+    expect(() => applyAction(empty, { type: 'pitch', player: pitchingTeam(empty), choice: { card: 0 } })).not.toThrow();
+  });
+
+  it('an Easy pitch sends a Tired Arm from the hand back to stamina, up to the cap', () => {
+    let s = structuredClone(start(3));
+    const pid = pitchingTeam(s);
+    s.players[pid].pitching.hand = ['changeup', 'tiredArm', 'tiredArm'];
+    s.players[pid].stamina = STAMINA - 2;
+    s = pitch(s, 0, { action: 'take' });
+    expect(s.players[pid].stamina).toBe(STAMINA - 1);
+    expect(s.lastPlay?.result).toMatch(/back to stamina/);
+    // At the cap, stamina stays put but the Tired Arm still leaves the deck.
+    let t = structuredClone(start(3));
+    t.players[pid].pitching.hand = ['changeup', 'tiredArm'];
+    const before = deckList(t.players[pid].pitching).filter((id) => id === 'tiredArm').length;
+    t = pitch(t, 0, { action: 'take' });
+    expect(t.players[pid].stamina).toBe(STAMINA);
+    expect(deckList(t.players[pid].pitching).filter((id) => id === 'tiredArm').length).toBe(before - 1);
+  });
+
   it('an Easy pitch removes a Tired Arm from the hand for good', () => {
     let s = structuredClone(start(3));
     const pid = pitchingTeam(s);
@@ -176,6 +210,18 @@ describe('innings and shopping', () => {
     s = applyAction(s, { type: 'release', player: who, deck: 'batting', cardId: 'swingAway' });
     expect(deckList(s.players[who].batting)).toHaveLength(size - 1);
     expect(() => applyAction(s, { type: 'release', player: who, deck: 'batting', cardId: 'swingAway' })).toThrow(/Already released/);
+  });
+
+  it('releasing a Tired Arm wins back a point of stamina', () => {
+    let s = autoplay(start(4), ['veteran', 'veteran'], 4, (g) => g.phase === 'shop');
+    s = structuredClone(s);
+    // The team that just pitched has a Tired Arm from the half-inning.
+    const who = s.shop!.order[0];
+    s.players[who].stars = 5;
+    s.players[who].stamina = 1;
+    s.players[who].pitching.discard.push('tiredArm');
+    s = applyAction(s, { type: 'release', player: who, deck: 'pitching', cardId: 'tiredArm' });
+    expect(s.players[who].stamina).toBe(2);
   });
 
   it('cannot release below the minimum deck size', () => {

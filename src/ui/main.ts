@@ -1,6 +1,6 @@
 import './style.css';
 import { chooseAction } from '../ai/ai';
-import { IllegalAction, applyAction, battingTeam, newGame, pitchingTeam, score, verb, waitingOn } from '../engine/game';
+import { IllegalAction, STAMINA, applyAction, battingTeam, newGame, pitchingTeam, score, verb, waitingOn } from '../engine/game';
 import { Rng, randomSeed } from '../engine/rng';
 import type { Action, DeckName, Difficulty, GameState, PlayerId } from '../engine/types';
 import {
@@ -84,7 +84,11 @@ function save(): void {
 function loadSave(): { game: GameState; settings: Settings; humans: PlayerId[] } | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { game: GameState; settings: Settings; humans: PlayerId[] };
+    // Games saved before stamina existed start with a full tank.
+    for (const p of saved.game.players) p.stamina ??= STAMINA;
+    return saved;
   } catch {
     return null;
   }
@@ -397,11 +401,12 @@ function handle(actName: string, el: HTMLElement | null): void {
       return render();
     }
     case 'effort':
+      if (g.players[v].stamina <= 0) return;
       ui.maxEffort = !ui.maxEffort;
       return render();
     case 'throw':
       if (ui.selected === null) return;
-      act({ type: 'pitch', player: v, choice: { card: ui.selected, maxEffort: ui.maxEffort } });
+      act({ type: 'pitch', player: v, choice: { card: ui.selected, maxEffort: ui.maxEffort && g.players[v].stamina > 0 } });
       break;
     case 'meatball':
       act({ type: 'pitch', player: v, choice: { card: null } });

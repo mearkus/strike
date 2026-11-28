@@ -36,7 +36,7 @@ npm run sim        # AI-vs-AI round robin with league stats (balance tuning)
 | **Count** | 4 balls walk, 3 strikes out, two-strike fouls don't count. |
 | **Bases** | Singles score runners from 2nd; doubles score all but the runner from 1st; sac flies, double plays, steals, bunts and hit-and-runs are all in. Extra innings start with a runner on 2nd. |
 | **Deck-building** | Earn stars for hits, runs, walks, steals, outs and strikeouts. After every half-inning, both sides sign cards from a shared market or release one. |
-| **Fatigue** | *Tired Arm* cards are flat, wild and hittable. You gain one per half-inning pitched. **Max effort** gives any pitch +2 stuff but shuffles a Tired Arm into your draw pile, a push-your-luck choice in the spirit of the board game *Heat*. **Easy** pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand. |
+| **Fatigue** | *Tired Arm* cards are flat, wild and hittable. You gain one per half-inning pitched. **Max effort** gives any pitch +2 stuff, but it spends 1 of your 4 **stamina** and shuffles a Tired Arm into your draw pile. Like the engine in the board game *Heat*, stamina is finite, so save it for big spots. **Easy** pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand and back into stamina; releasing a Tired Arm in the market does too. |
 
 The in-game **How to play** button has the full rules.
 
@@ -62,8 +62,10 @@ are public) and your past choices. None of them see your hand.
   equilibrium (fictitious play), and shifts toward exploiting your observed habits once it
   has scouted ~12 of your pitches. It shops by measuring each card's value against your deck.
 
-Pitchers also weigh **max effort** against its fatigue cost: the chance the Tired Arm comes
-back this inning plus how often it will turn up in the innings they still have to pitch.
+Pitchers also weigh **max effort** against two costs: fatigue (the chance the Tired Arm comes
+back this inning, plus how often it will turn up in the innings they still have to pitch) and
+stamina (a point spent now can't be spent in a bigger spot later). The All-Star spends about
+90% of its stamina with runners in scoring position or two strikes.
 
 ## Project layout
 

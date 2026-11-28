@@ -37,6 +37,15 @@ export const MAX_EXTRA_INNINGS = 6;
 /** A deck can't be released below this many cards. */
 export const MIN_DECK_SIZE = 6;
 export const RELEASE_COST = 1;
+/**
+ * Stamina, the pitcher's Max Effort fuel (like the engine in Heat). Each Max Effort spends one;
+ * Easy pitches and releasing a Tired Arm in the market win one back, up to this cap.
+ */
+export const STAMINA = 4;
+
+const gainStamina = (p: PlayerState) => {
+  p.stamina = Math.min(STAMINA, (p.stamina ?? STAMINA) + 1);
+};
 
 export interface NewGameOptions {
   names: [string, string];
@@ -81,6 +90,7 @@ export function newGame(opts: NewGameOptions): GameState {
       pitching: newPile(STARTER_PITCHING, rng),
       batting: newPile(STARTER_BATTING, rng),
       stars: 0,
+      stamina: STAMINA,
       runsByInning: [],
       hits: 0,
       lineupPos: 0,
@@ -164,6 +174,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (s.pending.pitch) fail('Pitch already chosen');
       if (!legalPitchChoices(s).includes(action.choice.card)) fail('Illegal pitch');
       if (action.choice.maxEffort && action.choice.card === null) fail('No max effort on a Tired Arm with an empty hand');
+      if (action.choice.maxEffort && s.players[action.player].stamina <= 0) fail('No stamina left for max effort');
       s.pending.pitch = action.choice;
       break;
     }
@@ -200,6 +211,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
       const zone = (['discard', 'draw', 'hand'] as const).find((z) => pile[z].includes(action.cardId)) ?? fail('Card not in deck');
       pile[zone].splice(pile[zone].indexOf(action.cardId), 1);
       p.stars -= RELEASE_COST;
+      if (action.cardId === TIRED_ARM) gainStamina(p);
       s.shop!.released = true;
       log(s, `${verb(p.name, 'releases')} ${card(action.cardId).name}.`);
       break;
@@ -248,13 +260,15 @@ function resolve(s: GameState, rng: Rng): void {
   const pitch = maxEffort ? { ...base, stuff: base.stuff + MAX_EFFORT_STUFF } : base;
   const notes: string[] = [];
   if (maxEffort) {
-    // Like Heat: the strain comes back around soon. Shuffle the Tired Arm into the draw pile.
+    // Like Heat: spend stamina, and the strain comes back around soon in the draw pile.
+    pitcher.stamina -= 1;
     pitcher.pitching.draw.splice(rng.int(pitcher.pitching.draw.length + 1), 0, TIRED_ARM);
-    notes.push('Max effort: a Tired Arm is shuffled into the draw pile.');
+    notes.push(`Max effort: a Tired Arm is shuffled into the draw pile (stamina ${pitcher.stamina}/${STAMINA}).`);
   }
   if (pitch.effects.includes('easy') && pitcher.pitching.hand.includes(TIRED_ARM)) {
     pitcher.pitching.hand.splice(pitcher.pitching.hand.indexOf(TIRED_ARM), 1);
-    notes.push('Easy on the arm: a Tired Arm is gone for good.');
+    gainStamina(pitcher);
+    notes.push(`Easy on the arm: a Tired Arm goes back to stamina (${pitcher.stamina}/${STAMINA}).`);
   }
 
   let batId: string | null = null;
