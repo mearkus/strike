@@ -35,7 +35,7 @@ npm run sim        # AI-vs-AI round robin with league stats (balance tuning)
 | **Take or swing** | Taken strikes are strikes, taken chases are balls, the edge is a coin flip. Chasing hurts contact but you may check your swing. |
 | **Count** | 4 balls walk, 3 strikes out, two-strike fouls don't count. |
 | **Bases** | Singles score runners from 2nd; doubles score all but the runner from 1st; sac flies, double plays, steals, bunts and hit-and-runs are all in. Extra innings start with a runner on 2nd. |
-| **Deck-building** | Earn stars for hits, runs, walks, steals, outs and strikeouts. After every half-inning, both sides sign cards from a shared market or release one. |
+| **Deck-building** | You start with small 8-card decks and 3★ for a spring-training signing before the first pitch. Earn stars for hits, runs, walks, steals, outs and strikeouts, plus 3★ per half-inning. After every half-inning, both sides sign cards from a shared market or release one. Signed players report immediately: the card goes straight into your hand. |
 | **Fatigue** | *Tired Arm* cards are flat, wild and hittable. You gain one per half-inning pitched. **Max effort** gives any pitch +2 stuff, but it spends 1 of your 4 **stamina** and shuffles a Tired Arm into your draw pile. Like the engine in the board game *Heat*, stamina is finite, so save it for big spots. **Easy** pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand and back into stamina; releasing a Tired Arm in the market does too. |
 
 The in-game **How to play** button has the full rules.

@@ -1,5 +1,5 @@
 import { HACK, MEATBALL, batCard, card, pitchCard } from '../engine/cards';
-import { RELEASE_COST, MIN_DECK_SIZE, STAMINA, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
+import { ECONOMY, RELEASE_COST, MIN_DECK_SIZE, STAMINA, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
 import { type BatAction, MAX_EFFORT_STUFF, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK } from '../engine/situation';
 import { Rng } from '../engine/rng';
@@ -453,27 +453,40 @@ function chooseShop(s: GameState, me: PlayerId, difficulty: Difficulty, rng: Rng
     return card(best.id).cost >= 2 ? { type: 'buy', player: me, marketIndex: best.i } : end;
   }
 
-  // All-Star: buy the card that improves its deck the most, or save up for a better one.
+  // All-Star: buy the card that improves its deck the most, or save up for a better one,
+  // but only while there is a later market visit to spend the savings on.
+  const visitsLeft = marketVisitsLeft(s);
   const scored = s.market.row.map((id, i) => {
     const c = card(id);
     const deck: DeckName = c.kind === 'pitch' ? 'pitching' : 'batting';
     const gain = cardRating(s, me, id) - deckAverage(s, me, deck);
     return { id, i, gain, cost: c.cost };
   });
-  const buyable = scored.filter((x) => x.cost <= p.stars && x.gain > 0.004);
+  // Signings report straight to the hand, so even a modest upgrade gets used; on the last visit
+  // stars are worth nothing afterwards, so take anything that isn't a downgrade.
+  const threshold = visitsLeft === 0 ? -0.005 : 0.002;
+  const buyable = scored.filter((x) => x.cost <= p.stars && x.gain > threshold);
   if (!buyable.length) {
     // Nothing worth buying: consider releasing the weakest starter instead.
-    if (canRelease) {
+    if (canRelease && visitsLeft > 0) {
       const rel = worstCard(s, me);
       if (rel) return { type: 'release', player: me, deck: rel.deck, cardId: rel.id };
     }
     return end;
   }
   const best = buyable.reduce((a, b) => (b.gain > a.gain ? b : a));
-  // Save for a clearly better card we can afford next visit.
-  const dream = scored.filter((x) => x.cost > p.stars && x.cost <= p.stars + 3 && x.gain > best.gain * 1.6);
-  if (dream.length && best.cost >= 2 && p.stars - best.cost < dream[0].cost - 3) return end;
+  // Save for a clearly better card we can afford by the next visit.
+  const income = ECONOMY.halfInningStars + 1;
+  const dream = visitsLeft > 0 ? scored.filter((x) => x.cost > p.stars && x.cost <= p.stars + income && x.gain > best.gain * 1.6) : [];
+  if (dream.length && best.cost >= 2 && p.stars - best.cost < dream[0].cost - income) return end;
   return { type: 'buy', player: me, marketIndex: best.i };
+}
+
+/** Market visits this manager gets after the current one (0 on the last visit of regulation). */
+export function marketVisitsLeft(s: GameState): number {
+  if (s.shop?.pregame) return 2 * s.config.innings - 1;
+  const halfJustEnded = (s.inning - 1) * 2 + (s.half === 'bottom' ? 1 : 0);
+  return Math.max(0, 2 * s.config.innings - 2 - halfJustEnded);
 }
 
 function worstCard(s: GameState, me: PlayerId): { deck: DeckName; id: string } | null {

@@ -70,23 +70,24 @@ export const CARDS: Record<string, CardDef> = Object.fromEntries(
   ].map((c) => [c.id, c]),
 );
 
+/** 8-card starter decks, so signed players make up a real share of the deck quickly. */
 export const STARTER_PITCHING = [
-  'fourSeam', 'fourSeam', 'twoSeam', 'highHeat',
+  'fourSeam', 'twoSeam', 'highHeat',
   'curveball', 'slider', 'dirtCurve',
-  'changeup', 'cornerChange', 'lowChange',
+  'changeup', 'cornerChange',
 ];
 
 export const STARTER_BATTING = [
-  'swingAway', 'swingAway', 'swingAway', 'swingAway',
+  'swingAway', 'swingAway',
   'sitHeat', 'sitHeat', 'sitCurve', 'sitChange', 'bunt', 'steal',
 ];
 
-/** Copies of each card in the shared market supply. */
+/** Copies of each card in the shared market supply (enough for a 9-inning game of active signing). */
 export const MARKET_SUPPLY: Record<string, number> = {
-  gas: 2, paintedHeater: 3, heavySinker: 2, cutter: 3, pitchout: 2, hammer: 2, backdoor: 3,
-  sweeper: 2, circleChange: 3, splitter: 2, tunnelChange: 2, eephus: 2, knuckleball: 2,
-  moonshot: 2, launchAngle: 2, barrel: 3, waitHook: 2, stayBack: 2, slap: 3, protect: 3,
-  spoil: 3, ambush: 2, clutch: 2, timedUp: 2, hitAndRun: 2, jetSteal: 2, dragBunt: 2, goodEye: 3,
+  gas: 3, paintedHeater: 4, heavySinker: 3, cutter: 4, pitchout: 3, hammer: 3, backdoor: 4,
+  sweeper: 3, circleChange: 4, splitter: 3, tunnelChange: 3, eephus: 3, knuckleball: 3,
+  moonshot: 3, launchAngle: 3, barrel: 4, waitHook: 3, stayBack: 3, slap: 4, protect: 4,
+  spoil: 4, ambush: 3, clutch: 3, timedUp: 3, hitAndRun: 3, jetSteal: 3, dragBunt: 3, goodEye: 4,
 };
 
 export const MARKET_ROW_SIZE = 6;

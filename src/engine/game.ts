@@ -43,6 +43,19 @@ export const RELEASE_COST = 1;
  */
 export const STAMINA = 4;
 
+/**
+ * The star economy. Mutable so balance experiments (scripts/sim.ts) can try variants; the game
+ * itself never changes it.
+ */
+export const ECONOMY = {
+  /** Stars each manager starts with, to spend in the pre-game market. */
+  startingStars: 3,
+  /** Stars both managers earn at the end of every half-inning. */
+  halfInningStars: 3,
+  /** Signed players report immediately: new cards go straight into your hand. */
+  signedToHand: true,
+};
+
 const gainStamina = (p: PlayerState) => {
   p.stamina = Math.min(STAMINA, (p.stamina ?? STAMINA) + 1);
 };
@@ -52,6 +65,8 @@ export interface NewGameOptions {
   ai: [Difficulty | null, Difficulty | null];
   innings: number;
   seed: number;
+  /** Open with a spring-training market visit before the first pitch (the real game does). */
+  pregame?: boolean;
 }
 
 function newPile(cards: string[], rng: Rng): Pile {
@@ -89,7 +104,7 @@ export function newGame(opts: NewGameOptions): GameState {
       ai: opts.ai[i],
       pitching: newPile(STARTER_PITCHING, rng),
       batting: newPile(STARTER_BATTING, rng),
-      stars: 0,
+      stars: opts.pregame ? ECONOMY.startingStars : 0,
       stamina: STAMINA,
       runsByInning: [],
       hits: 0,
@@ -110,13 +125,16 @@ export function newGame(opts: NewGameOptions): GameState {
     half: 'top',
     sit: freshSituation(),
     abPitches: [],
-    phase: 'pitch',
+    phase: opts.pregame ? 'shop' : 'pitch',
     pending: {},
-    shop: null,
+    // Spring training: the home team signs first, since the away team bats first.
+    shop: opts.pregame ? { order: [1, 0], current: 0, released: false, pregame: true } : null,
     market: { row, supply },
     lastPlay: null,
     history: [],
-    log: [{ inning: 1, half: 'top', text: `Play ball! ${verb(opts.names[0], 'bats')} first.` }],
+    log: opts.pregame
+      ? [{ inning: 1, half: 'top', text: `Spring training: each manager has ${ECONOMY.startingStars}★ to sign players before the first pitch.` }]
+      : [{ inning: 1, half: 'top', text: `Play ball! ${verb(opts.names[0], 'bats')} first.` }],
     rng: rng.state,
     winner: null,
   };
@@ -196,7 +214,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
       p.stars -= c.cost;
       s.market.row.splice(action.marketIndex, 1);
       if (s.market.supply.length > 0) s.market.row.splice(action.marketIndex, 0, s.market.supply.shift()!);
-      (c.kind === 'pitch' ? p.pitching : p.batting).discard.push(id);
+      // Signed players report immediately (into the hand), or join the discard pile.
+      (c.kind === 'pitch' ? p.pitching : p.batting)[ECONOMY.signedToHand ? 'hand' : 'discard'].push(id);
       log(s, `${verb(p.name, 'signs')} ${c.name}.`);
       break;
     }
@@ -221,10 +240,13 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (shopper !== action.player) fail('Not your turn to shop');
       if (s.shop!.current === 0) {
         s.shop = { ...s.shop!, current: 1, released: false };
+      } else if (s.shop!.pregame) {
+        s.phase = 'pitch';
+        s.shop = null;
+        log(s, `Play ball! ${verb(s.players[0].name, 'bats')} first.`);
       } else {
         startNextHalf(s, rng);
       }
-      break;
       break;
     }
   }
@@ -363,8 +385,8 @@ function endGame(s: GameState, winner: PlayerId | 'tie', text: string): void {
 function endHalfInning(s: GameState): void {
   const pid = pitchingTeam(s);
   s.players[pid].pitching.discard.push(TIRED_ARM);
-  s.players[0].stars += 1;
-  s.players[1].stars += 1;
+  s.players[0].stars += ECONOMY.halfInningStars;
+  s.players[1].stars += ECONOMY.halfInningStars;
   const away = score(s, 0);
   const home = score(s, 1);
   const last = s.inning >= s.config.innings;

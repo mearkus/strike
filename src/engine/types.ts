@@ -173,6 +173,8 @@ export interface ShopState {
   order: [PlayerId, PlayerId];
   current: 0 | 1;
   released: boolean;
+  /** The spring-training visit before the first pitch. */
+  pregame?: boolean;
 }
 
 export interface GameConfig {

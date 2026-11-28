@@ -116,7 +116,7 @@ function startGame(): void {
     ai = humanSide === 0 ? [null, st.difficulty] : [st.difficulty, null];
     humans = [humanSide];
   }
-  ui.game = newGame({ names, ai, innings: st.innings, seed: randomSeed() });
+  ui.game = newGame({ names, ai, innings: st.innings, seed: randomSeed(), pregame: true });
   ui.humans = humans;
   ui.viewer = null;
   ui.selected = null;
@@ -302,7 +302,7 @@ function animateField(container: HTMLElement): void {
 }
 
 function passHtml(g: GameState, a: PlayerId): string {
-  const what = g.phase === 'shop' ? 'visit the market' : pitchingTeam(g) === a ? 'pick a pitch' : 'pick a swing';
+  const what = g.phase === 'shop' ? (g.shop?.pregame ? 'sign players for spring training' : 'visit the market') : pitchingTeam(g) === a ? 'pick a pitch' : 'pick a swing';
   return `<div class="pass">
     <h2>Pass to ${esc(g.players[a].name)}</h2>
     <p>${esc(g.players[a].name)}, it's your turn to ${what}. Everyone else, look away.</p>
