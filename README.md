@@ -5,6 +5,9 @@ as **pitcher** and **batter**: both sides pick a card in secret every pitch, the
 Between half-innings you spend the stars you've earned to sign better cards. Play a
 friend on the same device, or the computer at three difficulty levels.
 
+New to the game? Press **Learn to play** on the start screen for a 5-minute interactive
+tutorial played on the real table.
+
 ## Getting started
 
 ```bash

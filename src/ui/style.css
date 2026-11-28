@@ -1305,3 +1305,132 @@ button.effort.on .stamina .pip.on {
   color: #fff;
   font-weight: 700;
 }
+
+/* ---------------- tutorial coach */
+.coach {
+  position: fixed;
+  right: 16px;
+  bottom: 270px;
+  width: 340px;
+  max-height: calc(100dvh - 300px);
+  overflow-y: auto;
+  z-index: 20;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 12px;
+  border: 3px solid var(--gold);
+  box-shadow: 0 16px 40px #000c;
+  padding: 14px 16px;
+}
+.coach.enter {
+  animation: pop 0.35s ease-out;
+}
+.coach.left {
+  right: auto;
+  left: 16px;
+  bottom: auto;
+  top: 90px;
+}
+.coach .coach-step {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #7a6420;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.coach h3 {
+  font-size: 1.1rem;
+  margin: 4px 0 6px;
+}
+.coach-body p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+.coach-hint {
+  background: #fde7c2;
+  border-left: 4px solid var(--heat);
+  padding: 6px 8px;
+  margin: 4px 0 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.coach-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.coach-actions button:not(.primary) {
+  background: #e9e4d6;
+  color: var(--ink);
+  border-color: #c9c1ab;
+}
+.coach-target {
+  outline: 3px solid var(--gold) !important;
+  outline-offset: 3px;
+  border-radius: 10px;
+  animation: coachpulse 1.6s ease-in-out infinite;
+  position: relative;
+  z-index: 4;
+}
+@keyframes coachpulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 #f2c14e00;
+  }
+  50% {
+    box-shadow: 0 0 0 8px #f2c14e55;
+  }
+}
+@media (max-width: 860px) {
+  /* Phones: the coach sits at the top; the hand stays docked at the bottom. */
+  .coach,
+  .coach.left {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    bottom: auto;
+    width: auto;
+    max-height: 40dvh;
+    padding: 10px 12px;
+  }
+  .coach-body p {
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+  }
+  /* In the market the hand is hidden anyway: keep the coach off the cards. */
+  .coach.over-shop {
+    top: auto;
+    bottom: 8px;
+  }
+  .coach-scout {
+    display: block;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-target {
+    animation: none;
+  }
+}
+
+.coach-scout {
+  display: none;
+  margin: 4px 0 8px;
+}
+.coach-scout .panel {
+  background: #173d2b;
+  color: var(--chalk);
+  padding: 8px 10px;
+}
+.coach-scout h3 {
+  font-size: 0.85rem;
+  margin: 0 0 2px;
+}
+.coach-hint .link {
+  background: none;
+  border: none;
+  color: #9c3d16;
+  text-decoration: underline;
+  padding: 0 0 0 4px;
+  font-weight: 700;
+}

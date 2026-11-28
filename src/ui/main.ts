@@ -2,6 +2,7 @@ import './style.css';
 import { chooseAction } from '../ai/ai';
 import { IllegalAction, STAMINA, applyAction, battingTeam, newGame, pitchingTeam, score, verb, waitingOn } from '../engine/game';
 import { Rng, randomSeed } from '../engine/rng';
+import { ME as TUTOR_ME, TUTORIAL, playScripted } from './tutorial';
 import type { Action, DeckName, Difficulty, GameState, PlayerId } from '../engine/types';
 import {
   DIFFICULTY_LABEL,
@@ -49,6 +50,8 @@ interface Ui {
   showSide: boolean;
   /** The intentional-walk button was clicked once and is asking for confirmation. */
   confirmWalk: boolean;
+  /** The interactive tutorial, when running. `shown` is the step/resolution already animated in. */
+  tutorial: { index: number; resolved: boolean; hint: string | null; shown?: string } | null;
   /** A half-inning just ended: hold on the field with a recap until the player continues. */
   recap: boolean;
   /** The card released on this market visit, kept in its slot so the list doesn't reflow. */
@@ -74,6 +77,7 @@ const ui: Ui = {
   maxEffort: false,
   showSide: false,
   confirmWalk: false,
+  tutorial: null,
   recap: false,
   released: null,
 };
@@ -83,6 +87,7 @@ const root = document.getElementById('app')!;
 // ---------------------------------------------------------------- persistence
 
 function save(): void {
+  if (ui.tutorial) return; // the tutorial never touches your saved game
   try {
     if (ui.game && ui.game.phase !== 'gameOver') localStorage.setItem(SAVE_KEY, JSON.stringify({ game: ui.game, settings: ui.settings, humans: ui.humans }));
     else localStorage.removeItem(SAVE_KEY);
@@ -130,6 +135,7 @@ function startGame(): void {
 
 function act(action: Action): void {
   if (!ui.game) return;
+  if (ui.tutorial) return tutorialAct(action);
   const before = ui.game.history.length;
   const phaseBefore = ui.game.phase;
   try {
@@ -195,6 +201,98 @@ function viewer(): PlayerId | null {
 }
 
 // ---------------------------------------------------------------- render
+
+// ---------------------------------------------------------------- tutorial
+
+function startTutorial(): void {
+  ui.tutorial = { index: 0, resolved: false, hint: null };
+  ui.humans = [TUTOR_ME];
+  ui.viewer = TUTOR_ME;
+  ui.game = TUTORIAL[0].setup!(null);
+  ui.selected = null;
+  ui.maxEffort = false;
+  ui.revealKey = 0;
+  ui.animatedKey = 0;
+  ui.showRules = false;
+  render();
+}
+
+/** The player's action during a lesson: only the one the step asks for counts. */
+function tutorialAct(action: Action): void {
+  const t = ui.tutorial!;
+  const step = TUTORIAL[t.index];
+  if (t.resolved || !step.expect) {
+    t.hint = t.resolved ? 'Press Next to continue.' : 'This step is just a look around. Press Next.';
+    return;
+  }
+  if (!step.expect.matches(action, ui.game!)) {
+    t.hint = step.expect.hint;
+    return;
+  }
+  const before = ui.game!.history.length;
+  ui.game = playScripted(ui.game!, action, step.opponent?.(ui.game!), step.want);
+  if (ui.game.history.length !== before) ui.revealKey++;
+  t.resolved = true;
+  t.hint = null;
+  ui.selected = null;
+  ui.maxEffort = false;
+  ui.confirmWalk = false;
+}
+
+function tutorialNext(): void {
+  const t = ui.tutorial!;
+  const step = TUTORIAL[t.index];
+  if (step.expect && !t.resolved) {
+    t.hint = step.expect.hint;
+    return render();
+  }
+  if (t.index >= TUTORIAL.length - 1) return endTutorial();
+  t.index++;
+  const next = TUTORIAL[t.index];
+  if (next.setup) ui.game = next.setup(ui.game);
+  t.resolved = false;
+  t.hint = null;
+  ui.selected = null;
+  ui.maxEffort = false;
+  ui.confirmWalk = false;
+  render();
+}
+
+function endTutorial(): void {
+  ui.tutorial = null;
+  ui.game = null;
+  ui.humans = [];
+  render();
+}
+
+function coachHtml(): string {
+  const t = ui.tutorial!;
+  const step = TUTORIAL[t.index];
+  const last = t.index === TUTORIAL.length - 1;
+  const waiting = !!step.expect && !t.resolved;
+  // Animate the card in only when the step (or its result) changes, not on every re-render.
+  const key = `${t.index}:${t.resolved}`;
+  const enter = t.shown !== key;
+  t.shown = key;
+  const overShop = ui.game?.phase === 'shop';
+  // Phones hide the side panel, so scouting lessons carry their own copy of it.
+  const scout = step.target === '.scouting' && ui.game && !t.resolved ? `<div class="coach-scout">${scoutingHtml(ui.game, TUTOR_ME)}</div>` : '';
+  return `<div class="coach ${step.placeLeft ? 'left' : ''} ${overShop ? 'over-shop' : ''} ${enter ? 'enter' : ''}" role="dialog" aria-live="polite" aria-label="Tutorial">
+    <div class="coach-step">Learn to play · ${t.index + 1} of ${TUTORIAL.length}</div>
+    <h3>${step.title}</h3>
+    <div class="coach-body">${t.resolved && step.after ? step.after : step.body}</div>
+    ${scout}
+    ${t.hint ? `<p class="coach-hint">${esc(t.hint)}${waiting && step.demo ? ` <button class="link" data-act="tutDemo">Show me</button>` : ''}</p>` : ''}
+    <div class="coach-actions">
+      ${
+        last
+          ? `<button class="primary" data-act="tutPlay">Play a real game</button>`
+          : `<button class="primary" data-act="tutNext" ${waiting ? 'disabled' : ''}>${waiting ? 'Your move…' : 'Next'}</button>`
+      }
+      <button data-act="tutExit">Exit tutorial</button>
+    </div>
+  </div>`;
+}
 
 /** Scrollable regions whose scroll position should survive a re-render. */
 const SCROLLERS = ['.overlay-body', '.log', '.stage', '.hand', '.market', '.deck-cards'];
@@ -268,6 +366,12 @@ function renderInner(): void {
     ${shopOpen ? `<div class="overlay"><div class="overlay-body">${shopHtml(g, v!, ui.releaseDeck, ui.released)}</div></div>` : ''}
   </div>
   ${ui.showRules ? `<div class="modal" data-act="rules"><div class="modal-body" data-stop>${rulesHtml()}<button class="primary" data-act="rules">Got it</button></div></div>` : ''}`;
+  if (ui.tutorial) {
+    root.insertAdjacentHTML('beforeend', coachHtml());
+    const target = TUTORIAL[ui.tutorial.index].target;
+    const el = target && !(ui.tutorial.resolved && TUTORIAL[ui.tutorial.index].expect) ? root.querySelector(target) : null;
+    el?.classList.add('coach-target');
+  }
   if (animate) animateField(root);
   ui.animatedKey = ui.revealKey;
 }
@@ -361,6 +465,7 @@ function setupHtml(): string {
       </div>
       <div class="controls">
         <button class="primary" type="submit">Play ball!</button>
+        <button type="button" data-act="tutorial">Learn to play (5-minute tutorial)</button>
         <button type="button" data-act="rules">How to play</button>
       </div>
     </form>
@@ -446,6 +551,7 @@ function handle(actName: string, el: HTMLElement | null): void {
       return step();
     }
     case 'quit':
+      if (ui.tutorial) return endTutorial();
       if (g && g.phase !== 'gameOver') {
         ui.confirmQuit = true;
         return render();
@@ -469,6 +575,23 @@ function handle(actName: string, el: HTMLElement | null): void {
       return render();
     case 'side':
       ui.showSide = !ui.showSide;
+      return render();
+    case 'tutorial':
+      return startTutorial();
+    case 'tutNext':
+      return tutorialNext();
+    case 'tutDemo': {
+      const demo = ui.tutorial && TUTORIAL[ui.tutorial.index].demo;
+      if (demo && ui.game) act(demo(ui.game));
+      return render();
+    }
+    case 'tutExit':
+      return endTutorial();
+    case 'tutPlay':
+      ui.tutorial = null;
+      ui.game = null;
+      ui.humans = [];
+      ui.settings = { ...ui.settings, mode: 'ai', difficulty: 'rookie' };
       return render();
     case 'nextInning':
       ui.recap = false;
