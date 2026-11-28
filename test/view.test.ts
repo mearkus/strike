@@ -7,7 +7,8 @@ import { Rng } from '../src/engine/rng';
 import { atBatHtml, atBatPlays, halfInningLine, recapHtml, scoreBugHtml, stageHtml } from '../src/ui/view';
 
 const take = (s: GameState) => {
-  s = applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: 0 } });
+  const card = s.players[pitchingTeam(s)].pitching.hand.length ? 0 : null; // empty hand: the forced Tired Arm
+  s = applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card } });
   return applyAction(s, { type: 'bat', player: battingTeam(s), choice: { action: 'take' } });
 };
 

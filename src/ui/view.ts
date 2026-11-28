@@ -1,5 +1,5 @@
 import { FOOLED_BY, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
-import { MIN_DECK_SIZE, RELEASE_COST, STAMINA, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
+import { ECONOMY, MIN_DECK_SIZE, RELEASE_COST, STAMINA, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
 import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK, STRIKES_FOR_OUT, advance } from '../engine/situation';
 import type { CardDef, DeckName, Difficulty, GameState, PlayRecord, PlayerId } from '../engine/types';
@@ -517,11 +517,11 @@ export function shopHtml(s: GameState, viewer: PlayerId, releaseDeck: DeckName, 
     .join('');
   return `<div class="shop">
     <div class="shop-head">
-      <h2>Market: ${esc(p.name)}</h2>
+      <h2>${shop.pregame ? 'Spring training' : 'Market'}: ${esc(p.name)}</h2>
       <div class="stars-big">${p.stars}★</div>
       <button class="primary" data-act="endShop">Done shopping</button>
     </div>
-    <p class="muted">Sign free agents with stars. New cards go to your discard pile and show up after your next shuffle. ${s.market.supply.length} cards left in the supply.</p>
+    <p class="muted">${shop.pregame ? 'Build your roster before the first pitch. ' : ''}Sign free agents with stars. Signed players report immediately: the card goes straight into your hand. ${s.market.supply.length} cards left in the supply.</p>
     <div class="market">${market || '<p>The market is empty.</p>'}</div>
     <h3>Release a card <small class="muted">(once per visit, ${RELEASE_COST}★; thins your deck${shop.released ? ', already used' : ''})</small></h3>
     <div class="tabs">
@@ -573,8 +573,10 @@ export function rulesHtml(): string {
   </ul>
   <h3>Building your deck</h3>
   <ul>
-    <li>Earn <b>stars</b>: batters for hits, walks, runs and steals; pitchers for outs and strikeouts; everyone +1 per half-inning.</li>
-    <li>After each half-inning, both managers visit the <b>market</b> (trailing team first) to sign new cards or release one.</li>
+    <li>Earn <b>stars</b>: batters for hits, walks, runs and steals; pitchers for outs and strikeouts; everyone +${ECONOMY.halfInningStars} per half-inning.</li>
+    <li>You start with small 8-card decks and ${ECONOMY.startingStars}★ for a <b>spring training</b> market visit before the first pitch.</li>
+    <li>After each half-inning, both managers earn ${ECONOMY.halfInningStars}★ and visit the <b>market</b> (trailing team first) to sign new cards or release one.</li>
+    <li>Signed players report immediately: a new card goes straight into your hand.</li>
     <li>Hands refill at the start of each at-bat: 5 pitches, 4 batting cards.</li>
   </ul>
   <h3>Scouting</h3>

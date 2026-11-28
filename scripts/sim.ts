@@ -22,7 +22,7 @@ export const GAMES = flag('games', 120);
 const INNINGS = flag('innings', 9);
 
 export function playGame(a: Difficulty, b: Difficulty, seed: number, innings = INNINGS): GameState {
-  let s = newGame({ names: [a, b], ai: [a, b], innings, seed });
+  let s = newGame({ names: [a, b], ai: [a, b], innings, seed, pregame: true });
   const rng = new Rng(seed ^ 0x5eed);
   let guard = 0;
   while (s.phase !== 'gameOver') {

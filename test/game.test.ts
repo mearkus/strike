@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { chooseAction } from '../src/ai/ai';
 import { BAT_HAND_SIZE, PITCH_HAND_SIZE, STARTER_BATTING, STARTER_PITCHING, card } from '../src/engine/cards';
 import {
+  ECONOMY,
   IllegalAction,
   MIN_DECK_SIZE,
   STAMINA,
@@ -52,6 +53,42 @@ describe('new game', () => {
     const a = autoplay(start(9), ['veteran', 'veteran']);
     const b = autoplay(start(9), ['veteran', 'veteran']);
     expect(a.log).toEqual(b.log);
+  });
+});
+
+describe('spring training and the economy', () => {
+  it('opens with a pre-game market: home signs first, then the away team bats', () => {
+    let s = newGame({ names: ['Away', 'Home'], ai: [null, null], innings: 3, seed: 1, pregame: true });
+    expect(s.phase).toBe('shop');
+    expect(s.shop).toMatchObject({ order: [1, 0], pregame: true });
+    expect(s.players[0].stars).toBe(ECONOMY.startingStars);
+    s = applyAction(s, { type: 'endShop', player: 1 });
+    s = applyAction(s, { type: 'endShop', player: 0 });
+    expect(s.phase).toBe('pitch');
+    expect(s.inning).toBe(1);
+    expect(s.half).toBe('top');
+    expect(battingTeam(s)).toBe(0);
+  });
+
+  it('signed players report straight to the hand', () => {
+    let s = newGame({ names: ['Away', 'Home'], ai: [null, null], innings: 3, seed: 2, pregame: true });
+    s = structuredClone(s);
+    s.players[1].stars = 10;
+    const id = s.market.row[0];
+    const c = card(id);
+    const pile = c.kind === 'pitch' ? 'pitching' : 'batting';
+    const before = s.players[1][pile].hand.length;
+    s = applyAction(s, { type: 'buy', player: 1, marketIndex: 0 });
+    expect(s.players[1][pile].hand).toHaveLength(before + 1);
+    expect(s.players[1][pile].hand).toContain(id);
+  });
+
+  it('both managers earn the half-inning income', () => {
+    const s0 = start(3);
+    const s = autoplay(s0, ['veteran', 'veteran'], 3, (g) => g.phase === 'shop');
+    // Income plus whatever each side earned on the field, which is never negative.
+    expect(s.players[0].stars).toBeGreaterThanOrEqual(ECONOMY.halfInningStars);
+    expect(s.players[1].stars).toBeGreaterThanOrEqual(ECONOMY.halfInningStars);
   });
 });
 
