@@ -461,7 +461,7 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
       }`;
     controls += `<div class="tools">
       <button data-act="mound" ${s.moundVisitUsed ? 'disabled' : ''} title="Once per half-inning: throw back your hand and draw ${PITCH_HAND_SIZE} fresh cards. You still pitch after.">${s.moundVisitUsed ? 'Mound visit used' : 'Mound visit'}</button>
-      <button data-act="ibb" class="${confirmWalk ? 'confirm' : ''}" title="Put the batter on first without throwing a pitch, to set up a force or a double play.">${confirmWalk ? 'Confirm: walk him' : 'Intentional walk'}</button>
+      <button data-act="ibb" class="${confirmWalk ? 'confirm' : ''}" ${s.sit.bases[0] ? 'disabled' : ''} title="${s.sit.bases[0] ? 'Only with first base open.' : 'Put the batter on first without throwing a pitch, to set up a force or a double play.'}">${confirmWalk ? 'Confirm: walk him' : 'Intentional walk'}</button>
     </div>`;
   } else {
     const sel = selected !== null ? card(pile.hand[selected]) : null;
@@ -574,7 +574,7 @@ export function rulesHtml(): string {
     <li>Fly balls score a runner from 3rd with less than two outs (sac fly). Grounders move runners up but can turn two.</li>
     <li><b>Steal</b> cards send the lead runner: roll a d6 plus the card's speed (+1 on the basic Steal), +1 against Breaking or Offspeed, −1 stealing 3rd; 4 or more is safe. <b>Bunts</b> sacrifice runners over, or try for a hit. <b>Hit &amp; Run</b> sends the runner on contact.</li>
     <li>Extra innings start with a runner on 2nd.</li>
-    <li>Pitchers have two free tools: a <b>mound visit</b> (once per half-inning, throw back your hand and draw a fresh one before you pitch) and the <b>intentional walk</b> (put the batter on first without a pitch, to set up a force or a double play).</li>
+    <li>Pitchers have two free tools: a <b>mound visit</b> (once per half-inning, throw back your hand and draw a fresh one before you pitch) and the <b>intentional walk</b> (with first base open, put the batter on first without a pitch, to set up a force or a double play).</li>
   </ul>
   <h3>Building your deck</h3>
   <ul>
