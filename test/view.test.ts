@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, battingTeam, newGame, pitchingTeam } from '../src/engine/game';
 import { advance } from '../src/engine/situation';
 import type { GameState } from '../src/engine/types';
-import { atBatHtml, atBatPlays, scoreBugHtml, stageHtml } from '../src/ui/view';
+import { chooseAction } from '../src/ai/ai';
+import { Rng } from '../src/engine/rng';
+import { atBatHtml, atBatPlays, halfInningLine, recapHtml, scoreBugHtml, stageHtml } from '../src/ui/view';
 
 const take = (s: GameState) => {
   s = applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: 0 } });
@@ -72,5 +74,25 @@ describe('field animation markup', () => {
     const s = after({ kind: 'foul' }, [true, false, true]);
     const html = stageHtml(s, false);
     expect(html.match(/class="runner"/g)!.length).toBe(2);
+  });
+});
+
+describe('inning recap', () => {
+  it('summarizes the half-inning that just ended', () => {
+    let s = newGame({ names: ['Cubs', 'Sox'], ai: ['veteran', 'veteran'], innings: 3, seed: 8 });
+    const rng = new Rng(8);
+    while (s.phase === 'pitch') {
+      const p = s.pending.pitch ? battingTeam(s) : pitchingTeam(s);
+      s = applyAction(s, chooseAction(s, p, 'veteran', rng));
+    }
+    expect(s.phase).toBe('shop');
+    const line = halfInningLine(s, 1, 'top');
+    expect(line.runs).toBe(s.players[0].runsByInning[0]);
+    expect(line.hits).toBeLessThanOrEqual(s.players[0].hits);
+    const html = recapHtml(s);
+    expect(html).toContain('Three outs');
+    expect(html).toContain('End of the top of the 1st');
+    expect(html).toContain('the bottom of the 1st');
+    expect(html).toContain('data-act="nextInning"');
   });
 });

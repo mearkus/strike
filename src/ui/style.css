@@ -734,7 +734,8 @@ input:not([type='radio']) {
   inset: 0;
   background: #000a;
   display: flex;
-  align-items: center;
+  /* Anchored to the top so the panel doesn't re-center (and jump) when its height changes. */
+  align-items: flex-start;
   justify-content: center;
   padding: 2vh 12px;
   z-index: 5;
@@ -743,6 +744,7 @@ input:not([type='radio']) {
   width: min(1100px, 100%);
   max-height: 96dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: var(--radius);
   box-shadow: 0 20px 50px #000c;
 }
@@ -1267,4 +1269,21 @@ button.effort.on .stamina .pip {
 }
 button.effort.on .stamina .pip.on {
   background: #fff;
+}
+
+/* ---------------- inning recap (in the dock) */
+.recap {
+  text-align: center;
+  padding: 8px 10px;
+}
+.recap h2 {
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.recap p {
+  margin: 4px 0;
+}
+.recap button {
+  margin-top: 6px;
+  min-width: 240px;
 }

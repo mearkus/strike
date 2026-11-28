@@ -10,6 +10,7 @@ import {
   logHtml,
   rulesHtml,
   scoreboardHtml,
+  recapHtml,
   scoreBugHtml,
   scoutingHtml,
   shopHtml,
@@ -46,6 +47,10 @@ interface Ui {
   maxEffort: boolean;
   /** Narrow screens: show the box score / scouting / log panel. */
   showSide: boolean;
+  /** A half-inning just ended: hold on the field with a recap until the player continues. */
+  recap: boolean;
+  /** The card released on this market visit, kept in its slot so the list doesn't reflow. */
+  released: { deck: DeckName; id: string } | null;
 }
 
 const SAVE_KEY = 'strike.save.v1';
@@ -66,6 +71,8 @@ const ui: Ui = {
   confirmQuit: false,
   maxEffort: false,
   showSide: false,
+  recap: false,
+  released: null,
 };
 const aiRng = new Rng(randomSeed());
 const root = document.getElementById('app')!;
@@ -121,6 +128,7 @@ function startGame(): void {
 function act(action: Action): void {
   if (!ui.game) return;
   const before = ui.game.history.length;
+  const phaseBefore = ui.game.phase;
   try {
     ui.game = applyAction(ui.game, action);
     ui.error = null;
@@ -129,6 +137,8 @@ function act(action: Action): void {
     else throw e;
   }
   if (ui.game.history.length !== before) ui.revealKey++;
+  // The third out: pause on the field before the market takes over.
+  if (phaseBefore === 'pitch' && ui.game.phase === 'shop') ui.recap = true;
   ui.selected = null;
   ui.maxEffort = false;
 }
@@ -145,7 +155,7 @@ function step(): void {
     for (const p of waitingOn(g)) if (g.players[p].ai) act(chooseAction(ui.game!, p, g.players[p].ai!, aiRng));
   }
   const g2 = ui.game;
-  if (g2 && g2.phase === 'shop') {
+  if (g2 && g2.phase === 'shop' && !ui.recap) {
     const shopper = waitingOn(g2)[0];
     if (g2.players[shopper].ai) {
       ui.aiTimer = setTimeout(() => {
@@ -178,7 +188,29 @@ function viewer(): PlayerId | null {
 
 // ---------------------------------------------------------------- render
 
+/** Scrollable regions whose scroll position should survive a re-render. */
+const SCROLLERS = ['.overlay-body', '.log', '.stage', '.hand', '.market', '.deck-cards'];
+
+/** Re-render without jumping: remember where each scrollable region (and the page) was. */
 function render(): void {
+  const saved = SCROLLERS.map((sel) => {
+    const el = root.querySelector(sel);
+    return el ? { sel, top: el.scrollTop, left: el.scrollLeft } : null;
+  });
+  const pageY = window.scrollY;
+  renderInner();
+  for (const p of saved) {
+    if (!p) continue;
+    const el = root.querySelector(p.sel);
+    if (el) {
+      el.scrollTop = p.top;
+      el.scrollLeft = p.left;
+    }
+  }
+  if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
+}
+
+function renderInner(): void {
   const g = ui.game;
   if (!g) {
     root.innerHTML = setupHtml();
@@ -191,13 +223,14 @@ function render(): void {
   // The dock at the bottom: your hand, or whatever the game is waiting for.
   let dock: string;
   if (g.phase === 'gameOver') dock = gameOverHtml(g);
+  else if (g.phase === 'shop' && ui.recap) dock = recapHtml(g);
   else if (a === null) dock = `<div class="dock-msg"><p class="waiting">${g.phase === 'shop' ? `${esc(g.players[waitingOn(g)[0]].name)} is shopping…` : 'Thinking…'}</p></div>`;
   else if (v === null) dock = passHtml(g, a);
   else if (g.phase === 'shop') dock = `<div class="dock-msg"><p class="waiting">Market is open.</p></div>`;
   else dock = handHtml(g, v, ui.selected, ui.maxEffort);
 
   const scoutFor = v ?? (ui.humans.length === 1 ? ui.humans[0] : null);
-  const shopOpen = g.phase === 'shop' && v !== null;
+  const shopOpen = g.phase === 'shop' && v !== null && !ui.recap;
   root.innerHTML = `
   <div class="table phase-${g.phase}">
     <header class="bug-bar">
@@ -224,7 +257,7 @@ function render(): void {
       </aside>
     </main>
     <footer class="dock">${dock}</footer>
-    ${shopOpen ? `<div class="overlay"><div class="overlay-body">${shopHtml(g, v!, ui.releaseDeck)}</div></div>` : ''}
+    ${shopOpen ? `<div class="overlay"><div class="overlay-body">${shopHtml(g, v!, ui.releaseDeck, ui.released)}</div></div>` : ''}
   </div>
   ${ui.showRules ? `<div class="modal" data-act="rules"><div class="modal-body" data-stop>${rulesHtml()}<button class="primary" data-act="rules">Got it</button></div></div>` : ''}`;
   if (animate) animateField(root);
@@ -374,6 +407,10 @@ root.addEventListener('keydown', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (!ui.game || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+  if (ui.recap && e.key === 'Enter') {
+    e.preventDefault();
+    return handle('nextInning', null);
+  }
   const v = viewer();
   if (v === null || ui.game.phase !== 'pitch') return;
   const n = Number(e.key);
@@ -425,6 +462,9 @@ function handle(actName: string, el: HTMLElement | null): void {
     case 'side':
       ui.showSide = !ui.showSide;
       return render();
+    case 'nextInning':
+      ui.recap = false;
+      return step();
     case 'relDeck':
       ui.releaseDeck = el!.dataset.deck as DeckName;
       return render();
@@ -464,9 +504,11 @@ function handle(actName: string, el: HTMLElement | null): void {
       break;
     case 'release':
       act({ type: 'release', player: v, deck: ui.releaseDeck, cardId: el!.dataset.id! });
+      if (!ui.error) ui.released = { deck: ui.releaseDeck, id: el!.dataset.id! };
       break;
     case 'endShop':
       act({ type: 'endShop', player: v });
+      ui.released = null;
       break;
     default:
       return;

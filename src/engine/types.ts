@@ -148,6 +148,9 @@ export interface RunnerMove {
 }
 
 export interface PlayRecord {
+  /** When the pitch happened (missing in games saved before this existed). */
+  inning?: number;
+  half?: 'top' | 'bottom';
   pitcher: PlayerId;
   batter: PlayerId;
   pitchCard: string;
