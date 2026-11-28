@@ -36,6 +36,13 @@ function countIds(ids: string[]): Map<string, number> {
   return m;
 }
 
+/** The Veteran starts using what it has seen of an opponent after this many of their pitches. */
+const VETERAN_SCOUTING_PITCHES = 8;
+/** The All-Star: when it starts exploiting, how much it trusts what it saw, and how hard it leans in. */
+const ALLSTAR_SCOUTING_PITCHES = 12;
+const ALLSTAR_TRUST = 0.5;
+const ALLSTAR_EXPLOIT = 0.4;
+
 /** How likely the AI thinks an opponent is to go max effort on a given pitch. */
 const EFFORT_PRIOR = 0.2;
 
@@ -334,17 +341,22 @@ export function choosePitch(s: GameState, me: PlayerId, difficulty: Difficulty, 
   const util = (dist: number[]) => mine.map((_, i) => -dot(M[i], dist) - penalty[i]);
 
   if (difficulty === 'veteran') {
-    return mine[sample(rng, softmax(util(normalize(bats.map((b) => b.weight))), 0.035))].choice;
+    // Plays the percentages against what it has seen: after a few pitches it uses the hitter's
+    // real take rate and favorite reads instead of assuming every hitter swings 70% of the time.
+    const prior = normalize(bats.map((b) => b.weight));
+    const t = tendencies(s, opp, 'bat');
+    const model = t.samples >= VETERAN_SCOUTING_PITCHES ? mix(prior, empiricalBatDist(bats, t, s.sit), 0.7) : prior;
+    return mine[sample(rng, softmax(util(model), 0.035))].choice;
   }
   // All-Star: equilibrium play, leaning toward exploiting observed tendencies.
   const neg = M.map((row, i) => row.map((v) => -v - penalty[i]));
   const eq = solveZeroSum(neg);
   let strategy = eq.row;
   const t = tendencies(s, opp, 'bat');
-  if (t.samples >= 12) {
-    const model = mix(eq.col, empiricalBatDist(bats, t, s.sit), 0.5);
+  if (t.samples >= ALLSTAR_SCOUTING_PITCHES) {
+    const model = mix(eq.col, empiricalBatDist(bats, t, s.sit), ALLSTAR_TRUST);
     const br = argmax(util(model));
-    strategy = mix(strategy, oneHot(mine.length, br), 0.4);
+    strategy = mix(strategy, oneHot(mine.length, br), ALLSTAR_EXPLOIT);
   }
   return mine[sample(rng, strategy)].choice;
 }
@@ -364,17 +376,20 @@ export function chooseBat(s: GameState, me: PlayerId, difficulty: Difficulty, rn
   const util = (dist: number[]) => mine.map((_, j) => pitches.reduce((a, _p, i) => a + dist[i] * M[i][j], 0) - penalty[j]);
 
   if (difficulty === 'veteran') {
-    return mine[sample(rng, softmax(util(normalize(pitches.map((p) => p.weight))), 0.035))].choice;
+    const prior = normalize(pitches.map((p) => p.weight));
+    const t = tendencies(s, opp, 'pitch');
+    const model = t.samples >= VETERAN_SCOUTING_PITCHES ? mix(prior, empiricalPitchDist(pitches, t), 0.7) : prior;
+    return mine[sample(rng, softmax(util(model), 0.035))].choice;
   }
   // Batter maximizes: transpose so rows are my options.
   const T = mine.map((_, j) => pitches.map((_p, i) => M[i][j] - penalty[j]));
   const eq = solveZeroSum(T);
   let strategy = eq.row;
   const t = tendencies(s, opp, 'pitch');
-  if (t.samples >= 12) {
-    const model = mix(eq.col, empiricalPitchDist(pitches, t), 0.5);
+  if (t.samples >= ALLSTAR_SCOUTING_PITCHES) {
+    const model = mix(eq.col, empiricalPitchDist(pitches, t), ALLSTAR_TRUST);
     const br = argmax(util(model));
-    strategy = mix(strategy, oneHot(mine.length, br), 0.4);
+    strategy = mix(strategy, oneHot(mine.length, br), ALLSTAR_EXPLOIT);
   }
   return mine[sample(rng, strategy)].choice;
 }
