@@ -81,6 +81,14 @@ describe('matchups', () => {
     expect(pInPlay('fourSeam', swing('sitHeat'))).toBeGreaterThan(pInPlay('changeup', swing('sitHeat')) + 0.3);
   });
 
+  it('a correct read squares the ball up: far more extra-base hits than a neutral swing', () => {
+    const xbh = (bat: BatAction) =>
+      outcomeDistribution(pinpoint('fourSeam', bat))
+        .filter((o) => o.outcome.kind === 'inPlay' && ['double', 'triple', 'homeRun'].includes(o.outcome.hit))
+        .reduce((a, o) => a + o.p, 0);
+    expect(xbh(swing('sitHeat'))).toBeGreaterThan(xbh(swing('swingAway')) * 4);
+  });
+
   it('chasing is worse than swinging at strikes', () => {
     expect(pInPlay('fourSeam', swing('swingAway'))).toBeGreaterThan(pInPlay('highHeat', swing('swingAway')));
   });

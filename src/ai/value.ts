@@ -8,17 +8,21 @@ import type { PitchOutcome, Situation } from '../engine/types';
  * Calibrated for Strike's rules with `npm run sim -- --calibrate` (rare states smoothed by hand).
  */
 export const RUN_EXPECTANCY: number[][] = [
-  [0.63, 1.13, 1.34, 1.77, 1.49, 1.95, 2.38, 2.6],
-  [0.31, 0.63, 0.8, 1.16, 1.11, 1.39, 1.45, 1.7],
-  [0.1, 0.25, 0.36, 0.47, 0.47, 0.52, 0.67, 0.8],
+  [0.7, 1.18, 1.42, 1.78, 1.6, 2.06, 2.48, 2.6],
+  [0.34, 0.7, 0.93, 1.17, 1.19, 1.54, 1.55, 1.74],
+  [0.12, 0.33, 0.45, 0.69, 0.46, 0.7, 0.89, 0.98],
 ];
 
-/** Run value of each ball-strike count relative to 0-0. Index: [balls][strikes]. Calibrated the same way. */
+/**
+ * Run value of each ball-strike count relative to 0-0. Index: [balls][strikes]. Calibrated the
+ * same way; because these values change how often the AI takes, they were updated in damped steps
+ * (halfway toward each new measurement) until stats and tables settled.
+ */
 export const COUNT_VALUE: number[][] = [
-  [0, -0.048, -0.085],
-  [0.121, 0.048, -0.015],
-  [0.297, 0.19, 0.036],
-  [0.36, 0.261, 0.09],
+  [0, -0.095, -0.183],
+  [0.091, -0.022, -0.132],
+  [0.261, 0.074, -0.1],
+  [0.385, 0.161, -0.008],
 ];
 
 export function basesMask(sit: Situation): number {

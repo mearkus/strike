@@ -31,8 +31,8 @@ npm run sim        # AI-vs-AI round robin with league stats (balance tuning)
 | **Pitch cards** | Type (Heat / Breaking / Offspeed), zone (Strike / Edge / Chase), stuff and control. |
 | **Command** | Every pitch rolls a d6 against its control. A miss drifts one zone wider: Strike → Edge → Chase → in the dirt (always a ball, can be a wild pitch). |
 | **Swing cards** | Sit on a pitch type, plus contact and power. Tactics: Steal, Bunt, Good Eye. |
-| **Read triangle** | Sit on the right type: +3 contact. Get fooled: −2. Sit Heat is fooled by Offspeed, Sit Breaking by Heat, Sit Offspeed by Breaking. |
-| **Take or swing** | Taken strikes are strikes, taken chases are balls, the edge is a coin flip. Chasing hurts contact but you may check your swing. |
+| **Read triangle** | Sit on the right type: +3 contact and +1 hit quality. Get fooled: −2. Sit Heat is fooled by Offspeed, Sit Breaking by Heat, Sit Offspeed by Breaking. |
+| **Take or swing** | Taken strikes are strikes, taken chases are balls, and the edge is called a strike one time in three. Chasing hurts contact but you may check your swing. |
 | **Count** | 4 balls walk, 3 strikes out, two-strike fouls don't count. |
 | **Bases** | Singles score runners from 2nd; doubles score all but the runner from 1st; sac flies, double plays, steals, bunts and hit-and-runs are all in. Extra innings start with a runner on 2nd. |
 | **Deck-building** | You start with small 8-card decks and 3★ for a spring-training signing before the first pitch. Earn stars for hits, runs, walks, steals, outs and strikeouts, plus 3★ per half-inning. After every half-inning, both sides sign cards from a shared market or release one. Signed players report immediately: the card goes straight into your hand. |
