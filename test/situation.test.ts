@@ -90,6 +90,64 @@ describe('balls in play', () => {
   });
 });
 
+describe('runner moves', () => {
+  it('single: runner from second scores, runner from first to second, batter to first', () => {
+    const r = advance(sit([true, true, false]), play('single'));
+    expect(r.moves).toEqual([
+      { runner: 'B', to: 0 },
+      { runner: 1, to: 'home' },
+      { runner: 0, to: 1 },
+    ]);
+  });
+
+  it('double play: runner from first and batter out, runner from third scores', () => {
+    const r = advance(sit([true, false, true], 0), play('doublePlay'));
+    expect(r.moves).toEqual([
+      { runner: 'B', to: 'out' },
+      { runner: 2, to: 'home' },
+      { runner: 0, to: 'out' },
+    ]);
+  });
+
+  it('grand slam: everyone comes home', () => {
+    expect(advance(sit([true, true, true]), play('homeRun')).moves.map((m) => m.to)).toEqual(['home', 'home', 'home', 'home']);
+  });
+
+  it('walk with the bases loaded forces everyone up one', () => {
+    const r = advance(sit([true, true, true], 0, BALLS_FOR_WALK - 1), { kind: 'ball' });
+    expect(r.moves).toEqual([
+      { runner: 'B', to: 0 },
+      { runner: 2, to: 'home' },
+      { runner: 1, to: 2 },
+      { runner: 0, to: 1 },
+    ]);
+  });
+
+  it('a runner who is not forced stays put on a walk', () => {
+    expect(advance(sit([false, true, false], 0, BALLS_FOR_WALK - 1), { kind: 'ball' }).moves).toEqual([{ runner: 'B', to: 0 }]);
+  });
+
+  it('sac fly: batter out, runner from third scores', () => {
+    expect(advance(sit([false, false, true], 1), play('flyout')).moves).toEqual([
+      { runner: 'B', to: 'out' },
+      { runner: 2, to: 'home' },
+    ]);
+  });
+
+  it('strikeouts and plain balls move nobody', () => {
+    expect(advance(sit([true, false, false], 0, 0, 2), { kind: 'swingingStrike' }).moves).toEqual([]);
+    expect(advance(sit([true, false, false]), { kind: 'ball' }).moves).toEqual([]);
+  });
+
+  it('steals: safe at second, or caught at third with the trailing runner moving up', () => {
+    expect(advance(sit([true, false, false]), { kind: 'ball', steal: 'safe' }).moves).toEqual([{ runner: 0, to: 1 }]);
+    expect(advance(sit([true, true, false]), { kind: 'ball', steal: 'caught' }).moves).toEqual([
+      { runner: 1, to: 'out' },
+      { runner: 0, to: 1 },
+    ]);
+  });
+});
+
 describe('wild pitches', () => {
   it('move every runner up a base and still count as a ball', () => {
     const r = advance(sit([true, false, true], 1, 1, 1), { kind: 'ball', dirt: true, wild: true });

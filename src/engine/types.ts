@@ -138,6 +138,15 @@ export interface LogEntry {
   runs?: number;
 }
 
+/** Who a runner is: the batter ('B'), or the base (0 = 1st, 1 = 2nd, 2 = 3rd) they started the pitch on. */
+export type RunnerId = 'B' | 0 | 1 | 2;
+/** Where a runner ended the play: a base, home (scored), or out. */
+export type RunnerDest = 0 | 1 | 2 | 'home' | 'out';
+export interface RunnerMove {
+  runner: RunnerId;
+  to: RunnerDest;
+}
+
 export interface PlayRecord {
   pitcher: PlayerId;
   batter: PlayerId;
@@ -152,6 +161,8 @@ export interface PlayRecord {
   text: string;
   /** Just the result, e.g. "Base hit! 1 run scores." */
   result: string;
+  /** Who ran where on the play (missing in games saved before this existed). */
+  moves?: RunnerMove[];
   situationBefore: Situation;
 }
 

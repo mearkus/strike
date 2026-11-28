@@ -227,7 +227,45 @@ function render(): void {
     ${shopOpen ? `<div class="overlay"><div class="overlay-body">${shopHtml(g, v!, ui.releaseDeck)}</div></div>` : ''}
   </div>
   ${ui.showRules ? `<div class="modal" data-act="rules"><div class="modal-body" data-stop>${rulesHtml()}<button class="primary" data-act="rules">Got it</button></div></div>` : ''}`;
+  if (animate) animateField(root);
   ui.animatedKey = ui.revealKey;
+}
+
+/**
+ * Play the field animation for a newly revealed pitch: every element with `data-path` follows its
+ * waypoints ("x,y,scale" points) after `data-delay` ms over `data-dur` ms. `data-end` says what
+ * happens on arrival: stay, or fade out (hide / score / out).
+ */
+function animateField(container: HTMLElement): void {
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  container.querySelectorAll<SVGGraphicsElement>('.diamond [data-path]').forEach((el) => {
+    const pts = (el.dataset.path ?? '').split(' ').map((p) => p.split(',').map(Number));
+    if (pts.length === 0) return;
+    const fades = el.dataset.end !== 'stay';
+    const frames: Keyframe[] = pts.map(([x, y, sc = 1], i) => ({
+      transform: `translate(${x}px, ${y}px) scale(${sc})`,
+      opacity: 1,
+      offset: pts.length > 1 ? i / (pts.length - 1) : 1,
+    }));
+    if (fades) frames.push({ ...frames[frames.length - 1], opacity: 0, offset: undefined });
+    if (fades && frames.length > 1) {
+      // Hold at the destination briefly, then fade.
+      const n = frames.length;
+      frames.forEach((f, i) => (f.offset = i === n - 1 ? 1 : n > 2 ? (i / (n - 2)) * 0.85 : 0));
+    }
+    const [x, y, sc = 1] = pts[pts.length - 1];
+    if (reduce || typeof el.animate !== 'function') {
+      el.setAttribute('transform', `translate(${x} ${y}) scale(${sc})`);
+      if (fades) el.setAttribute('opacity', '0');
+      return;
+    }
+    el.animate(frames, {
+      duration: Number(el.dataset.dur ?? 400) * (fades ? 1.2 : 1),
+      delay: Number(el.dataset.delay ?? 0),
+      fill: 'both',
+      easing: el.classList.contains('runner') ? 'ease-in-out' : 'linear',
+    });
+  });
 }
 
 function passHtml(g: GameState, a: PlayerId): string {

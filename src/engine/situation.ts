@@ -1,5 +1,7 @@
 import { stealTarget } from './resolve';
-import type { Bases, PitchOutcome, Situation } from './types';
+import type { Bases, PitchOutcome, RunnerDest, RunnerId, RunnerMove, Situation } from './types';
+
+export type { RunnerDest, RunnerId, RunnerMove };
 
 export type AtBatResult =
   | 'walk'
@@ -27,6 +29,8 @@ export interface AdvanceResult {
   inningOver: boolean;
   result: AtBatResult | null;
   steal: { result: 'safe' | 'caught'; to: 2 | 3 } | null;
+  /** Every runner (and the batter) who changed place, for animating the play. */
+  moves: RunnerMove[];
 }
 
 export const BALLS_FOR_WALK = 4;
@@ -40,179 +44,187 @@ export function freshSituation(): Situation {
   return { bases: emptyBases(), outs: 0, balls: 0, strikes: 0 };
 }
 
-/** Every runner moves up `n` bases. Returns runs scored. Batter placement is separate. */
-function advanceRunners(b: Bases, n: number): { bases: Bases; runs: number } {
-  const out = emptyBases();
-  let runs = 0;
-  for (let i = 2; i >= 0; i--) {
-    if (!b[i]) continue;
-    const to = i + n;
-    if (to >= 3) runs++;
-    else out[to] = true;
-  }
-  return { bases: out, runs };
-}
-
-function forceAdvance(b: Bases): { bases: Bases; runs: number } {
-  const out: Bases = [true, b[1], b[2]];
-  let runs = 0;
-  if (b[0]) {
-    out[1] = true;
-    if (b[1]) {
-      out[2] = true;
-      if (b[2]) runs = 1;
-    }
-  }
-  return { bases: out, runs };
-}
+type Occupancy = [RunnerId | null, RunnerId | null, RunnerId | null];
 
 /** Apply a pitch outcome to the situation. Pure. */
 export function advance(before: Situation, outcome: PitchOutcome): AdvanceResult {
-  const sit: Situation = { bases: [...before.bases] as Bases, outs: before.outs, balls: before.balls, strikes: before.strikes };
-  let runs = 0;
+  // Track runners by who they are, so the play can be animated runner by runner.
+  let occ: Occupancy = before.bases.map((on, i) => (on ? (i as RunnerId) : null)) as Occupancy;
+  const scored: RunnerId[] = [];
+  const retired: RunnerId[] = [];
+  let outs = before.outs;
+  let balls = before.balls;
+  let strikes = before.strikes;
   let steal: AdvanceResult['steal'] = null;
+
+  /** Every runner moves up `n` bases. */
+  const moveAll = (n: number) => {
+    const next: Occupancy = [null, null, null];
+    for (let i = 2; i >= 0; i--) {
+      const r = occ[i];
+      if (r === null) continue;
+      if (i + n >= 3) scored.push(r);
+      else next[i + n] = r;
+    }
+    occ = next;
+  };
+  /** Batter to first; forced runners move up. */
+  const force = () => {
+    if (occ[0] !== null) {
+      if (occ[1] !== null) {
+        if (occ[2] !== null) scored.push(occ[2]);
+        occ[2] = occ[1];
+      }
+      occ[1] = occ[0];
+    }
+    occ[0] = 'B';
+  };
+  const retire = (r: RunnerId) => {
+    retired.push(r);
+    outs++;
+  };
+  const finish = (result: AtBatResult | null, opts: { batterDone?: boolean } = {}): AdvanceResult => {
+    const atBatOver = result !== null;
+    const inningOver = outs >= 3;
+    const moves: RunnerMove[] = [];
+    const starters: RunnerId[] = ['B', 2, 1, 0];
+    for (const r of starters) {
+      if (r !== 'B' && !before.bases[r]) continue;
+      const at = occ.indexOf(r);
+      let to: RunnerDest | null = null;
+      if (scored.includes(r)) to = 'home';
+      else if (retired.includes(r)) to = 'out';
+      else if (at >= 0 && at !== r) to = at as 0 | 1 | 2;
+      if (to !== null) moves.push({ runner: r, to });
+    }
+    const bases: Bases = inningOver ? emptyBases() : [occ[0] !== null, occ[1] !== null, occ[2] !== null];
+    return {
+      sit: { bases, outs, balls: atBatOver || inningOver ? 0 : balls, strikes: atBatOver || inningOver ? 0 : strikes },
+      runs: scored.length,
+      atBatOver: atBatOver || inningOver,
+      batterDone: opts.batterDone ?? atBatOver,
+      inningOver,
+      result,
+      steal,
+      moves,
+    };
+  };
 
   // Steals happen first, while the pitch is on its way.
   if ('steal' in outcome && outcome.steal) {
-    const to = stealTarget(sit.bases);
+    const to = stealTarget(before.bases);
     steal = { result: outcome.steal, to };
-    const from = to - 2; // index of the runner
-    if (outcome.steal === 'safe') {
-      sit.bases[from + 1] = true;
-      sit.bases[from] = false;
-      if (to === 3 && sit.bases[0]) {
-        sit.bases[0] = false;
-        sit.bases[1] = true;
-      }
-    } else {
-      sit.bases[from] = false;
-      sit.outs++;
-      if (to === 3 && sit.bases[0]) {
-        sit.bases[0] = false;
-        sit.bases[1] = true;
-      }
-      if (sit.outs >= 3) {
-        return { sit: { ...sit, balls: 0, strikes: 0 }, runs: 0, atBatOver: true, batterDone: false, inningOver: true, result: null, steal };
-      }
+    const from = to - 2; // base index of the runner
+    const runner = occ[from]!;
+    occ[from] = null;
+    if (outcome.steal === 'safe') occ[from + 1] = runner;
+    else retire(runner);
+    // On a steal of third, the runner behind moves up to second either way.
+    if (to === 3 && occ[0] !== null) {
+      occ[1] = occ[0];
+      occ[0] = null;
     }
+    if (outs >= 3) return finish(null, { batterDone: false });
   }
 
   let result: AtBatResult | null = null;
-  const out = (n = 1) => {
-    sit.outs += n;
-  };
-  const move = (n: number) => {
-    const r = advanceRunners(sit.bases, n);
-    sit.bases = r.bases;
-    runs += r.runs;
-  };
-
   switch (outcome.kind) {
     case 'ball':
-      if (outcome.wild) move(1);
-      sit.balls++;
-      if (sit.balls >= BALLS_FOR_WALK) {
-        const r = forceAdvance(sit.bases);
-        sit.bases = r.bases;
-        runs += r.runs;
+      if (outcome.wild) moveAll(1);
+      balls++;
+      if (balls >= BALLS_FOR_WALK) {
+        force();
         result = 'walk';
       }
       break;
     case 'calledStrike':
     case 'swingingStrike':
     case 'buntFoul':
-      sit.strikes++;
-      if (sit.strikes >= STRIKES_FOR_OUT) {
-        out();
+      strikes++;
+      if (strikes >= STRIKES_FOR_OUT) {
+        outs++; // the batter stays at the plate; no runner move to animate
         result = 'strikeout';
       }
       break;
     case 'foul':
-      if (sit.strikes < FOUL_STRIKE_LIMIT) sit.strikes++;
+      if (strikes < FOUL_STRIKE_LIMIT) strikes++;
       break;
     case 'sacrifice':
-      out();
-      if (sit.outs < 3) move(1);
+      retire('B');
+      if (outs < 3) moveAll(1);
       result = 'sacrifice';
       break;
     case 'buntHit':
-      move(1);
-      sit.bases[0] = true;
+      moveAll(1);
+      occ[0] = 'B';
       result = 'buntHit';
       break;
     case 'buntOut':
-      out();
+      retire('B');
       result = 'buntOut';
       break;
     case 'inPlay': {
-      const hr = outcome.hitAndRun === true;
+      const hnr = outcome.hitAndRun === true;
+      const [r1, r2, r3] = occ;
       switch (outcome.hit) {
         case 'groundout':
-          out();
-          if (sit.outs < 3) move(1);
+          retire('B');
+          if (outs < 3) moveAll(1);
           result = 'groundout';
           break;
         case 'doublePlay':
-          sit.bases[0] = false;
-          out(2);
-          if (sit.outs < 3) move(1);
+          occ[0] = null;
+          if (r1 !== null) retire(r1);
+          retire('B');
+          if (outs < 3) moveAll(1);
           result = 'doublePlay';
           break;
         case 'popout':
-          out();
+          retire('B');
           result = 'popout';
           break;
-        case 'flyout': {
-          out();
+        case 'flyout':
+          retire('B');
           result = 'flyout';
-          if (sit.outs < 3) {
-            if (sit.bases[2]) {
-              sit.bases[2] = false;
-              runs++;
+          if (outs < 3) {
+            if (r3 !== null) {
+              occ[2] = null;
+              scored.push(r3);
               result = 'sacFly';
             }
-            if (sit.bases[1] && !sit.bases[2]) {
-              sit.bases[1] = false;
-              sit.bases[2] = true;
+            if (occ[1] !== null && occ[2] === null) {
+              occ[2] = occ[1];
+              occ[1] = null;
             }
           }
           break;
-        }
-        case 'single': {
-          const b = sit.bases;
-          runs += (b[1] ? 1 : 0) + (b[2] ? 1 : 0);
-          sit.bases = [true, b[0] && !hr, b[0] && hr];
+        case 'single':
+          if (r3 !== null) scored.push(r3);
+          if (r2 !== null) scored.push(r2);
+          occ = ['B', hnr ? null : r1, hnr ? r1 : null];
           result = 'single';
           break;
-        }
-        case 'double': {
-          const b = sit.bases;
-          runs += (b[1] ? 1 : 0) + (b[2] ? 1 : 0) + (b[0] && hr ? 1 : 0);
-          sit.bases = [false, true, b[0] && !hr];
+        case 'double':
+          if (r3 !== null) scored.push(r3);
+          if (r2 !== null) scored.push(r2);
+          if (r1 !== null && hnr) scored.push(r1);
+          occ = [null, 'B', hnr ? null : r1];
           result = 'double';
           break;
-        }
         case 'triple':
-          runs += sit.bases.filter(Boolean).length;
-          sit.bases = [false, false, true];
+          for (const r of [r3, r2, r1]) if (r !== null) scored.push(r);
+          occ = [null, null, 'B'];
           result = 'triple';
           break;
         case 'homeRun':
-          runs += sit.bases.filter(Boolean).length + 1;
-          sit.bases = emptyBases();
+          for (const r of [r3, r2, r1]) if (r !== null) scored.push(r);
+          scored.push('B');
+          occ = [null, null, null];
           result = 'homeRun';
           break;
       }
       break;
     }
   }
-
-  const atBatOver = result !== null;
-  if (atBatOver) {
-    sit.balls = 0;
-    sit.strikes = 0;
-  }
-  const inningOver = sit.outs >= 3;
-  if (inningOver) sit.bases = emptyBases();
-  return { sit, runs, atBatOver: atBatOver || inningOver, batterDone: atBatOver, inningOver, result, steal };
+  return finish(result);
 }

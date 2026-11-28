@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, battingTeam, newGame, pitchingTeam } from '../src/engine/game';
+import { advance } from '../src/engine/situation';
 import type { GameState } from '../src/engine/types';
-import { atBatHtml, atBatPlays, scoreBugHtml } from '../src/ui/view';
+import { atBatHtml, atBatPlays, scoreBugHtml, stageHtml } from '../src/ui/view';
 
 const take = (s: GameState) => {
   s = applyAction(s, { type: 'pitch', player: pitchingTeam(s), choice: { card: 0 } });
@@ -35,5 +36,41 @@ describe('at-bat tracker', () => {
     expect(html).toContain('Sox');
     expect(html).toContain('1st');
     expect(html.match(/dot ball/g)).toHaveLength(3);
+  });
+});
+
+describe('field animation markup', () => {
+  /** Force a specific outcome onto the last play, as if it just happened. */
+  function after(outcome: GameState['history'][number]['outcome'], bases: [boolean, boolean, boolean]): GameState {
+    let s = newGame({ names: ['A', 'B'], ai: [null, null], innings: 3, seed: 2 });
+    s = take(s);
+    s = structuredClone(s);
+    const before = { bases, outs: 0, balls: 0, strikes: 0 };
+    const adv = advance(before, outcome);
+    s.lastPlay = { ...s.lastPlay!, outcome, situationBefore: before, moves: adv.moves };
+    s.sit = adv.sit;
+    return s;
+  }
+
+  it('a single with a runner on second: batter runs to first, runner scores, ball flies', () => {
+    const html = stageHtml(after({ kind: 'inPlay', hit: 'single' }, [false, true, false]), true);
+    const runners = [...html.matchAll(/class="runner[^"]*" r="7" data-path="([^"]+)"[^>]*data-end="(\w+)"/g)].map((m) => [m[1].split(' ').pop(), m[2]]);
+    expect(runners).toContainEqual(['182.0,82.0,1', 'stay']); // batter ends on first
+    expect(runners).toContainEqual(['100.0,162.0,1', 'score']); // runner from second comes home
+    expect(html).toContain('+1');
+    expect(html.match(/class="ball"/g)!.length).toBe(2); // the pitch and the batted ball
+  });
+
+  it('a called third strike gets a backwards K; no animation when not animating', () => {
+    const s = after({ kind: 'calledStrike' }, [false, false, false]);
+    s.lastPlay!.situationBefore.strikes = 2;
+    expect(stageHtml(s, true)).toContain('stamp k looking');
+    expect(stageHtml(s, false)).not.toContain('data-path');
+  });
+
+  it('runners who stay put are drawn on their bases', () => {
+    const s = after({ kind: 'foul' }, [true, false, true]);
+    const html = stageHtml(s, false);
+    expect(html.match(/class="runner"/g)!.length).toBe(2);
   });
 });

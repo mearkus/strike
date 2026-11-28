@@ -120,20 +120,130 @@ export function scoreBugHtml(s: GameState, flashRuns: boolean): string {
 
 // ---------------------------------------------------------------- stage (field + last pitch + at-bat)
 
+// Field geometry (SVG user units). Bases: 0 = 1st, 1 = 2nd, 2 = 3rd, 3 = home.
+const HOME: [number, number] = [100, 162];
+const BASE_XY: Array<[number, number]> = [[182, 82], [100, 16], [18, 82], HOME];
+const MOUND: [number, number] = [100, 92];
+/** Milliseconds: when the field animation starts (after the cards flip) and per base run. */
+export const FIELD_TIMING = { pitchStart: 250, pitch: 320, perBase: 340 };
+
+const pt = ([x, y]: [number, number], s = 1) => `${x.toFixed(1)},${y.toFixed(1)},${s}`;
+
+/** Sample a ball flight from a to b with an arc of the given height (and a little growth at the apex). */
+function flight(a: [number, number], b: [number, number], height: number, steps = 14): string {
+  const out: string[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const lift = 4 * t * (1 - t);
+    out.push(pt([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - height * lift], 1 + (height / 40) * lift));
+  }
+  return out.join(' ');
+}
+
+/** Where batted balls go. `lane` (0 = left, 1 = center, 2 = right) varies the spray. */
+function landing(hit: string, lane: number): { to: [number, number]; height: number; ms: number } {
+  const pick = <T,>(a: T[]) => a[lane % a.length];
+  switch (hit) {
+    case 'groundout':
+    case 'doublePlay':
+      return { to: pick<[number, number]>([[58, 102], [112, 70], [142, 102]]), height: 0, ms: 420 };
+    case 'popout':
+      return { to: pick<[number, number]>([[78, 118], [100, 100], [124, 118]]), height: 70, ms: 800 };
+    case 'flyout':
+      return { to: pick<[number, number]>([[38, 6], [100, -16], [162, 6]]), height: 55, ms: 820 };
+    case 'single':
+      return { to: pick<[number, number]>([[46, 34], [100, -4], [154, 34]]), height: 18, ms: 560 };
+    case 'double':
+      return { to: pick<[number, number]>([[40, 8], [100, -22], [160, 8]]), height: 30, ms: 680 };
+    case 'triple':
+      return { to: pick<[number, number]>([[8, 40], [192, 40], [8, 40]]), height: 28, ms: 720 };
+    case 'homeRun':
+      return { to: pick<[number, number]>([[4, -40], [100, -62], [196, -40]]), height: 75, ms: 950 };
+    default:
+      return { to: pick<[number, number]>([[86, 140], [114, 140]]), height: 0, ms: 380 }; // bunts
+  }
+}
+
+/** Waypoints for a runner from base `from` (-1 = batter at home) to a destination. */
+function runnerPath(from: number, to: number | 'home' | 'out'): { pts: [number, number][]; bases: number } {
+  const start: [number, number] = from < 0 ? HOME : BASE_XY[from];
+  if (to === 'out') {
+    const next = BASE_XY[from + 1];
+    return { pts: [start, [(start[0] + next[0]) / 2, (start[1] + next[1]) / 2]], bases: 0.6 };
+  }
+  const end = to === 'home' ? 3 : to;
+  const pts: [number, number][] = [start];
+  for (let b = from + 1; b <= end; b++) pts.push(BASE_XY[b]);
+  return { pts, bases: Math.max(1, end - from) };
+}
+
 function diamondHtml(s: GameState, animate: boolean): string {
-  const b = s.sit.bases;
-  const before = s.lastPlay?.situationBefore.bases;
-  const base = (x: number, y: number, i: 0 | 1 | 2, label: string) => {
-    const changed = animate && before && before[i] !== b[i];
-    return `<rect x="${x - 12}" y="${y - 12}" width="24" height="24" transform="rotate(45 ${x} ${y})" class="base ${b[i] ? 'on' : ''} ${changed ? 'changed' : ''}"><title>${label}${b[i] ? ': runner' : ''}</title></rect>`;
-  };
-  return `<svg viewBox="0 0 200 175" class="diamond" aria-label="Bases">
+  const lp = s.lastPlay;
+  const moves = animate && lp?.moves ? lp.moves : null;
+  const base = ([x, y]: [number, number], label: string) =>
+    `<polygon points="${x},${y - 11} ${x + 11},${y} ${x},${y + 11} ${x - 11},${y}" class="base"><title>${label}</title></polygon>`;
+
+  // Runners: static tokens for anyone who didn't move; animated tokens for the play.
+  const movers = new Set(moves?.map((m) => m.runner) ?? []);
+  const tokens: string[] = [];
+  const startBases = moves && lp ? lp.situationBefore.bases : s.sit.bases;
+  const endBases = s.sit.bases;
+  [0, 1, 2].forEach((i) => {
+    const stays = moves ? startBases[i] && !movers.has(i as 0 | 1 | 2) && endBases[i] : endBases[i];
+    if (stays) tokens.push(`<circle class="runner" r="7" transform="translate(${BASE_XY[i][0]} ${BASE_XY[i][1]})"><title>Runner on ${['first', 'second', 'third'][i]}</title></circle>`);
+  });
+
+  const fx: string[] = [];
+  if (animate && lp) {
+    const T = FIELD_TIMING;
+    const o = lp.outcome;
+    const contactAt = T.pitchStart + T.pitch;
+    let runAt = contactAt + 120;
+    // The pitch: mound to plate (or past it into the dirt).
+    const plate: [number, number] = o.kind === 'ball' && o.dirt ? [100, 178] : HOME;
+    fx.push(`<circle class="ball" r="3.6" data-path="${flight(MOUND, plate, 6, 6)}" data-delay="${T.pitchStart}" data-dur="${T.pitch}" data-end="hide"/>`);
+    if (o.kind === 'inPlay' || o.kind === 'buntHit' || o.kind === 'sacrifice' || o.kind === 'buntOut') {
+      const hit = o.kind === 'inPlay' ? o.hit : 'bunt';
+      const l = landing(hit, s.history.length);
+      fx.push(`<circle class="ball" r="3.6" data-path="${flight(HOME, l.to, l.height)}" data-delay="${contactAt}" data-dur="${l.ms}" data-end="${hit === 'homeRun' ? 'hide' : 'stay'}"/>`);
+      runAt = contactAt + Math.min(260, l.ms * 0.4);
+      if (hit === 'homeRun') fx.push(`<text class="stamp gone" x="100" y="-30" style="animation-delay:${contactAt + l.ms - 200}ms">GONE!</text>`);
+    } else if (o.kind === 'foul') {
+      const side: [number, number] = s.history.length % 2 ? [-8, 120] : [208, 120];
+      fx.push(`<circle class="ball" r="3.6" data-path="${flight(HOME, side, 40, 10)}" data-delay="${contactAt}" data-dur="520" data-end="hide"/>`);
+    } else if (o.kind === 'ball' && o.wild) {
+      fx.push(`<circle class="ball" r="3.6" data-path="${flight([100, 178], [70, 172], 0, 4)}" data-delay="${contactAt}" data-dur="380" data-end="hide"/>`);
+    }
+    // Scorekeeping stamps.
+    const r = moves ? advanceResultName(lp) : null;
+    if (r === 'strikeout') fx.push(`<text class="stamp k ${o.kind === 'calledStrike' ? 'looking' : ''}" x="100" y="112" style="animation-delay:${contactAt}ms">K</text>`);
+    if (r === 'walk') fx.push(`<text class="stamp bb" x="100" y="110" style="animation-delay:${contactAt}ms">BB</text>`);
+    // Runners on the move.
+    for (const m of moves ?? []) {
+      const from = m.runner === 'B' ? -1 : m.runner;
+      const path = runnerPath(from, m.to);
+      const dur = Math.round(path.bases * T.perBase);
+      const end = m.to === 'home' ? 'score' : m.to === 'out' ? 'out' : 'stay';
+      fx.push(`<circle class="runner ${end === 'out' ? 'retired' : ''}" r="7" data-path="${path.pts.map((p) => pt(p)).join(' ')}" data-delay="${runAt}" data-dur="${dur}" data-end="${end}"/>`);
+      if (end === 'score') fx.push(`<text class="stamp run" x="${HOME[0] + 18}" y="${HOME[1] - 6}" style="animation-delay:${runAt + dur - 80}ms">+1</text>`);
+    }
+  }
+
+  return `<svg viewBox="-12 -70 224 250" class="diamond" aria-label="Field">
+    <path d="M100 162 L-8 54 Q100 -112 208 54 Z" class="grass"/>
     <path d="M100 162 L182 82 L100 12 L18 82 Z" class="infield"/>
-    ${base(182, 82, 0, 'First')}
-    ${base(100, 16, 1, 'Second')}
-    ${base(18, 82, 2, 'Third')}
+    <circle cx="${MOUND[0]}" cy="${MOUND[1]}" r="9" class="mound"/>
+    ${base(BASE_XY[0], 'First')}
+    ${base(BASE_XY[1], 'Second')}
+    ${base(BASE_XY[2], 'Third')}
     <path d="M90 152 L110 152 L110 162 L100 170 L90 162 Z" class="plate"/>
+    ${tokens.join('')}
+    ${fx.join('')}
   </svg>`;
+}
+
+function advanceResultName(lp: PlayRecord): string | null {
+  return advance(lp.situationBefore, lp.outcome).result;
 }
 
 function resultClass(lp: PlayRecord): string {
