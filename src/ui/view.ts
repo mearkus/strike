@@ -1,5 +1,5 @@
 import { FOOLED_BY, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
-import { MIN_DECK_SIZE, RELEASE_COST, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
+import { MIN_DECK_SIZE, RELEASE_COST, STAMINA, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
 import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK, STRIKES_FOR_OUT, advance } from '../engine/situation';
 import type { CardDef, DeckName, Difficulty, GameState, PlayRecord, PlayerId } from '../engine/types';
@@ -251,7 +251,7 @@ export function scoutingHtml(s: GameState, viewer: PlayerId): string {
     rows += `<div class="bars">${[...PITCH_TYPES, 'knuckle'].filter((t) => types.get(t)).map((t) => `<span class="mini t-${t}">${TYPE_LABEL[t]} ${pct(types.get(t)!)}</span>`).join('')}</div>`;
     rows += `<div class="bars">${['strike', 'edge', 'chase'].filter((z) => zones.get(z)).map((z) => `<span class="mini zone z-${z}">${ZONE_LABEL[z]} ${pct(zones.get(z)!)}</span>`).join('')}</div>`;
     const tired = tiredCount(deckList(s.players[opp].pitching));
-    rows += `<p class="muted">Fatigue: ${tired} Tired Arm${tired === 1 ? '' : 's'} in their deck.</p>`;
+    rows += `<p class="muted">Fatigue: ${tired} Tired Arm${tired === 1 ? '' : 's'} in their deck. Stamina ${staminaPips(s.players[opp].stamina)}</p>`;
   } else {
     const sits = new Map<string, number>();
     for (const id of unseen) {
@@ -266,6 +266,11 @@ export function scoutingHtml(s: GameState, viewer: PlayerId): string {
     <p class="muted">Unplayed ${pitching ? 'pitches' : 'batting cards'} (${unseen.length}), ${s.players[opp][pitching ? 'pitching' : 'batting'].hand.length} in hand:</p>
     ${rows}
   </div>`;
+}
+
+/** Stamina meter: filled pips for each Max Effort left. */
+export function staminaPips(n: number): string {
+  return `<span class="stamina" title="${n} of ${STAMINA} stamina: each Max Effort spends one" aria-label="${n} of ${STAMINA} stamina">${Array.from({ length: STAMINA }, (_, i) => `<span class="pip ${i < n ? 'on' : ''}"></span>`).join('')}</span>`;
 }
 
 function fatigueHtml(deck: string[]): string {
@@ -306,7 +311,11 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
       pile.hand.length === 0
         ? `<button class="primary" data-act="meatball">Out of cards: groove a Tired Arm fastball</button>`
         : `<button class="primary" data-act="throw" ${sel ? '' : 'disabled'}>${sel ? `Throw ${esc(sel.name)}${maxEffort ? ' with max effort' : ''}` : 'Pick a pitch'}</button>
-      <button class="effort ${maxEffort ? 'on' : ''}" data-act="effort" aria-pressed="${maxEffort}" title="+${MAX_EFFORT_STUFF} stuff on this pitch, but a Tired Arm is shuffled into your draw pile. (E)">🔥 Max effort ${maxEffort ? 'ON' : 'off'}</button>`;
+      ${
+        pl.stamina > 0
+          ? `<button class="effort ${maxEffort ? 'on' : ''}" data-act="effort" aria-pressed="${maxEffort}" title="+${MAX_EFFORT_STUFF} stuff on this pitch. Spends 1 stamina and shuffles a Tired Arm into your draw pile. (E)">🔥 Max effort ${maxEffort ? 'ON' : 'off'} ${staminaPips(pl.stamina)}</button>`
+          : `<button class="effort" disabled title="Out of stamina. Throw an Easy pitch or release a Tired Arm in the market to win some back.">🔥 Out of stamina ${staminaPips(0)}</button>`
+      }`;
   } else {
     const sel = selected !== null ? card(pile.hand[selected]) : null;
     const verb = sel ? (sel.kind === 'swing' ? `Swing: ${esc(sel.name)}` : `Play ${esc(sel.name)}`) : 'Pick a card';
@@ -399,9 +408,10 @@ export function rulesHtml(): string {
   <h3>Fatigue and max effort</h3>
   <ul>
     <li><b>Tired Arm</b> cards are flat, wild (control 2) and hittable. You gain one after every half-inning you pitch.</li>
-    <li><b>🔥 Max effort:</b> reach back for +${MAX_EFFORT_STUFF} stuff on any pitch, but a Tired Arm is <b>shuffled into your draw pile</b>, so the strain can come back this same inning.</li>
-    <li><b>Easy</b> pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand for good when you throw them.</li>
-    <li>You can also release a Tired Arm in the market.</li>
+    <li><b>Stamina:</b> every pitcher starts with ${STAMINA} stamina, the fuel for Max Effort (like the engine in <i>Heat</i>). With none left, you can't go Max Effort.</li>
+    <li><b>🔥 Max effort:</b> reach back for +${MAX_EFFORT_STUFF} stuff on any pitch. It spends 1 stamina and <b>shuffles a Tired Arm into your draw pile</b>, so the strain can come back this same inning. Save it for the big spots.</li>
+    <li><b>Easy</b> pitches (Changeup, Circle Change, Eephus, Knuckleball) shake a Tired Arm out of your hand when you throw them, and it goes back to your stamina.</li>
+    <li>Releasing a Tired Arm in the market also wins back 1 stamina (up to ${STAMINA}).</li>
   </ul>
   <h3>The read triangle</h3>
   <p>Swing cards "sit" on a pitch type. Guess right for +3 contact; get fooled for −2. "Any" swings never gain or lose.</p>

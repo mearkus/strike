@@ -40,8 +40,9 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
 - `engine/game.ts`: the `GameState` reducer: pitches, at-bats, half-innings, market, game end.
 - `ai/value.ts`: run expectancy + count values → run value of any outcome.
 - `ai/ai.ts`: payoff matrix per pitch (each pitch with and without max effort, priced by
-  `fatigueCost`), Veteran = softmax best response, All-Star = Nash (fictitious play) blended
-  with exploitation of observed tendencies; shop logic.
+  `fatigueCost` + `staminaCost`; no max effort at 0 stamina), Veteran = softmax best
+  response, All-Star = Nash (fictitious play) blended with exploitation of observed
+  tendencies; shop logic.
 - Tuning note: the AI's count values feed back into how often it takes pitches, so after a
   rules change, calibrate, re-run the sim, and repeat until the tables stop moving.
 - `ui/main.ts`: controller (AI turns, hot-seat privacy, localStorage autosave) and the

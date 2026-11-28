@@ -1,5 +1,5 @@
 import { HACK, MEATBALL, batCard, card, pitchCard } from '../engine/cards';
-import { RELEASE_COST, MIN_DECK_SIZE, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
+import { RELEASE_COST, MIN_DECK_SIZE, STAMINA, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
 import { type BatAction, MAX_EFFORT_STUFF, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK } from '../engine/situation';
 import { Rng } from '../engine/rng';
@@ -66,7 +66,8 @@ function ownPitchOptions(s: GameState, p: PlayerId): PitchOption[] {
     if (e) e.weight++;
     else seen.set(id, { key: id, choice: { card: i }, pitch: pitchCard(id), effort: false, weight: 1 });
   });
-  return withEffort([...seen.values()]);
+  const plain = [...seen.values()];
+  return s.players[p].stamina > 0 ? withEffort(plain) : plain;
 }
 
 /** What the opposing pitcher might throw: everything not in their discard pile, sometimes with max effort. */
@@ -74,7 +75,7 @@ function oppPitchOptions(s: GameState, opp: PlayerId): PitchOption[] {
   const pile = s.players[opp].pitching;
   if (pile.hand.length === 0) return [{ key: MEATBALL, choice: { card: null }, pitch: pitchCard(MEATBALL), effort: false, weight: 1 }];
   const base = [...countIds([...pile.draw, ...pile.hand])].map(([id, n]) => ({ key: id, choice: { card: 0 }, pitch: pitchCard(id), effort: false, weight: n }));
-  return withEffort(base, EFFORT_PRIOR);
+  return s.players[opp].stamina > 0 ? withEffort(base, EFFORT_PRIOR) : base;
 }
 
 /** Runs a Tired Arm thrown in place of a typical pitch costs, roughly. */
@@ -93,6 +94,26 @@ export function fatigueCost(s: GameState, me: PlayerId): number {
   const halvesLeft = Math.max(0, s.config.innings - s.inning);
   const later = Math.min(2, (halvesLeft * PITCHES_PER_HALF) / (deckList(pile).length + 1));
   return TIRED_ARM_THROW_COST * (now + later);
+}
+
+/** What one point of stamina is worth when spent in a really big spot, in runs. */
+export const STAMINA_POINT_VALUE = 0.06;
+/** Roughly the share of pitches that are big enough spots to want max effort. */
+const BIG_SPOT_SHARE = 0.1;
+
+/**
+ * Opportunity cost of spending one point of stamina now: stamina is limited, so a point spent
+ * on this pitch can't be spent on a bigger one later. Cheap when stamina is plentiful compared
+ * with the big spots still to come; dear when it's scarce.
+ */
+export function staminaCost(s: GameState, me: PlayerId): number {
+  const stamina = s.players[me].stamina;
+  if (stamina <= 0) return Infinity;
+  const pitchesLeft = (3 - s.sit.outs) * 5 + Math.max(0, s.config.innings - s.inning) * PITCHES_PER_HALF;
+  const bigSpotsLeft = pitchesLeft * BIG_SPOT_SHARE;
+  // With full stamina, the next refill (an Easy pitch or a release) would be wasted, so spending is cheaper.
+  const full = stamina >= STAMINA ? 0.5 : 1;
+  return STAMINA_POINT_VALUE * full * Math.min(1, bigSpotsLeft / stamina);
 }
 
 function ownBatOptions(s: GameState, p: PlayerId): BatOption[] {
@@ -301,13 +322,13 @@ export function choosePitch(s: GameState, me: PlayerId, difficulty: Difficulty, 
   if (difficulty === 'rookie') {
     const plain = mine.filter((o) => !o.effort);
     const pick = rng.pick(plain).choice;
-    return rng.next() < 0.15 ? { ...pick, maxEffort: true } : pick;
+    return s.players[me].stamina > 0 && rng.next() < 0.15 ? { ...pick, maxEffort: true } : pick;
   }
 
   const opp = (1 - me) as PlayerId;
   const bats = oppBatOptions(s, opp);
   const M = payoffMatrix(s, mine, bats);
-  const fatigue = fatigueCost(s, me);
+  const fatigue = fatigueCost(s, me) + staminaCost(s, me);
   const penalty = mine.map((o) => cardSpendPenalty(s, o.pitch.cost) + (o.effort ? fatigue : 0));
   // Pitcher wants to minimize batter value.
   const util = (dist: number[]) => mine.map((_, i) => -dot(M[i], dist) - penalty[i]);

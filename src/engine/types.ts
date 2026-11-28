@@ -124,6 +124,8 @@ export interface PlayerState {
   pitching: Pile;
   batting: Pile;
   stars: number;
+  /** Max-effort fuel, like the engine in Heat: Tired Arms set aside that Max Effort pushes into the deck. */
+  stamina: number;
   runsByInning: number[];
   hits: number;
   lineupPos: number;
