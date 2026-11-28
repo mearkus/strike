@@ -8,9 +8,9 @@ import type { PitchOutcome, Situation } from '../engine/types';
  * Calibrated for Strike's rules with `npm run sim -- --calibrate` (rare states smoothed by hand).
  */
 export const RUN_EXPECTANCY: number[][] = [
-  [0.7, 1.18, 1.42, 1.78, 1.6, 2.06, 2.48, 2.6],
-  [0.34, 0.7, 0.93, 1.17, 1.19, 1.54, 1.55, 1.74],
-  [0.12, 0.33, 0.45, 0.69, 0.46, 0.7, 0.89, 0.98],
+  [0.75, 1.27, 1.43, 2.0, 1.62, 2.06, 2.57, 2.68],
+  [0.37, 0.74, 0.94, 1.3, 1.22, 1.46, 1.67, 2.0],
+  [0.14, 0.37, 0.45, 0.7, 0.53, 0.74, 0.88, 1.05],
 ];
 
 /**
@@ -19,10 +19,10 @@ export const RUN_EXPECTANCY: number[][] = [
  * (halfway toward each new measurement) until stats and tables settled.
  */
 export const COUNT_VALUE: number[][] = [
-  [0, -0.095, -0.183],
-  [0.091, -0.022, -0.132],
-  [0.261, 0.074, -0.1],
-  [0.385, 0.161, -0.008],
+  [0, -0.097, -0.207],
+  [0.056, -0.041, -0.187],
+  [0.237, 0.069, -0.143],
+  [0.375, 0.162, -0.037],
 ];
 
 export function basesMask(sit: Situation): number {

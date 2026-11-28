@@ -203,7 +203,7 @@ export const TUTORIAL: TutorialStep[] = [
   },
   {
     title: 'Two free tools',
-    body: `<p><b>Mound visit</b>: once per half-inning, throw back your whole hand and draw a fresh one, then pitch. Use it when your hand is all wrong for the count.</p>
+    body: `<p><b>Mound visit</b>: once per half-inning, before the first pitch of an at-bat, throw back your whole hand and draw a fresh one, then pitch. Use it when your hand is all wrong for the count.</p>
       <p><b>Intentional walk</b>: with first base open, put the batter on first without a pitch, to set up a force or a double play.</p>`,
     target: '.tools',
   },

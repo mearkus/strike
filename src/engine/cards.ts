@@ -47,7 +47,7 @@ export const CARDS: Record<string, CardDef> = Object.fromEntries(
     pitch({ id: 'tiredArm', name: 'Tired Arm', type: 'heat', zone: 'strike', stuff: -1, control: 2, cost: 0, effects: ['meatball'], text: 'Fatigue: flat, wild and hittable. You gain one after every half-inning you pitch and every Max Effort pitch.' }),
 
     // ---------- Batting: starter ----------
-    swing({ id: 'swingAway', name: 'Swing Away', sit: 'any', contact: 0, power: 0, cost: 1, text: 'A plain cut. No guess, no penalty.' }),
+    swing({ id: 'swingAway', name: 'Swing Away', sit: 'any', contact: 1, power: 0, cost: 1, text: 'A plain cut. No guess, no penalty.' }),
     swing({ id: 'sitHeat', name: 'Sit Fastball', sit: 'heat', contact: 0, power: 1, cost: 1, text: 'Gear up for Heat.' }),
     swing({ id: 'sitCurve', name: 'Sit Breaking', sit: 'curve', contact: 0, power: 1, cost: 1, text: 'Wait on the breaking ball.' }),
     swing({ id: 'sitChange', name: 'Sit Offspeed', sit: 'change', contact: 0, power: 1, cost: 1, text: 'Stay back on the changeup.' }),

@@ -1,5 +1,5 @@
 import { HACK, MEATBALL, PITCH_HAND_SIZE, batCard, card, pitchCard } from '../engine/cards';
-import { ECONOMY, RELEASE_COST, MIN_DECK_SIZE, STAMINA, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
+import { ECONOMY, RELEASE_COST, MIN_DECK_SIZE, STAMINA, atBatStart, battingTeam, deckList, isBatChoiceLegal, pitchingTeam, score } from '../engine/game';
 import { type BatAction, MAX_EFFORT_STUFF, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK } from '../engine/situation';
 import { Rng } from '../engine/rng';
@@ -58,7 +58,7 @@ function veteranBatModel(s: GameState, opp: PlayerId, bats: BatOption[]): number
  * current hand with the expected best pitch of a fresh hand drawn from what's left.
  */
 export function shouldVisitMound(s: GameState, me: PlayerId, difficulty: Difficulty, rng: Rng): boolean {
-  if (difficulty === 'rookie' || s.moundVisitUsed) return false;
+  if (difficulty === 'rookie' || s.moundVisitUsed || !atBatStart(s)) return false;
   const pile = s.players[me].pitching;
   if (pile.hand.length === 0) return false;
   const opp = (1 - me) as PlayerId;

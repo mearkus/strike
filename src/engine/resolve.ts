@@ -97,7 +97,7 @@ export const SOLID_CONTACT = 7;
 
 /**
  * Quality (2d6 + modifiers) of a ball in play. A 9 is a single only on solid contact.
- * Contact hitters (power <= 0) stretch a 12 into a triple.
+ * A 12 is a home run for sluggers (power 2+), a double for most swings, and a triple for contact hitters (power <= 0).
  */
 export function qualityToHit(q: number, power: number, contact = SOLID_CONTACT): BallInPlay {
   if (q <= 5) return 'groundout';
@@ -106,7 +106,7 @@ export function qualityToHit(q: number, power: number, contact = SOLID_CONTACT):
   if (q === 9) return contact >= SOLID_CONTACT ? 'single' : 'flyout';
   if (q === 10) return 'single';
   if (q === 11) return 'double';
-  if (q === 12) return power <= 0 ? 'triple' : 'double';
+  if (q === 12) return power >= 2 ? 'homeRun' : power <= 0 ? 'triple' : 'double';
   return 'homeRun';
 }
 

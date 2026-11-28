@@ -27,7 +27,8 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
 - The AI must only use public information (deck minus discard, history). Never read the
   opponent's `hand` contents in `src/ai`.
 - After changing any rule constant or card stats, run `npm run sim` and check the league
-  stats (target roughly: 5.5-6.5 runs/team/9, AVG .260-.300, K 22-28%, BB 6-9%) and that each
+  stats (target roughly: 6-7 runs/team/9, AVG .280-.310, K 22-28%, BB 6-9%; set a bit above
+  real baseball on purpose so short 3-inning games have action) and that each
   difficulty still beats the one below it. If run scoring shifts, re-run
   `npm run sim -- --calibrate` and update the tables in `src/ai/value.ts`.
 
