@@ -37,6 +37,8 @@ export const MAX_EXTRA_INNINGS = 6;
 /** A deck can't be released below this many cards. */
 export const MIN_DECK_SIZE = 6;
 export const RELEASE_COST = 1;
+/** Mid-at-bat, a pitcher whose hand drops below this many cards draws back up to it. */
+export const PITCHER_MIN_HAND = 2;
 /**
  * Stamina, the pitcher's Max Effort fuel (like the engine in Heat). Each Max Effort spends one;
  * Easy pitches and releasing a Tired Arm in the market win one back, up to this cap.
@@ -345,6 +347,9 @@ function resolve(s: GameState, rng: Rng): void {
   } else if (adv.atBatOver) {
     refill(pitcher.pitching, PITCH_HAND_SIZE, rng);
     refill(batter.batting, BAT_HAND_SIZE, rng);
+  } else if (pitcher.pitching.hand.length < PITCHER_MIN_HAND) {
+    // A long at-bat: the pitcher draws to keep options, so a patient hitter can't wait out a known hand.
+    refill(pitcher.pitching, PITCHER_MIN_HAND, rng);
   }
 }
 

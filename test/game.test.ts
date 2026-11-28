@@ -4,6 +4,7 @@ import { BAT_HAND_SIZE, PITCH_HAND_SIZE, STARTER_BATTING, STARTER_PITCHING, card
 import {
   ECONOMY,
   IllegalAction,
+  PITCHER_MIN_HAND,
   MIN_DECK_SIZE,
   STAMINA,
   applyAction,
@@ -149,6 +150,16 @@ describe('pitching and batting', () => {
     expect(deckList(pile).filter((id) => id === 'tiredArm').length).toBe(tiredBefore + 1);
     // The at-bat may not be over, so no refill: the draw pile grew by exactly one.
     if (s.history.length === 1 && !s.lastPlay?.result.includes('Strike three')) expect(pile.draw.length).toBe(drawBefore + 1);
+  });
+
+  it('mid-at-bat, a pitcher running low on cards draws back up to two', () => {
+    let s = structuredClone(start(6));
+    const pid = pitchingTeam(s);
+    s.players[pid].pitching.hand = ['highHeat'];
+    s.sit.strikes = 0;
+    s = pitch(s, 0, { action: 'take' }); // a chase pitch taken: ball one, the at-bat goes on
+    expect(s.sit.balls).toBe(1);
+    expect(s.players[pid].pitching.hand.length).toBe(PITCHER_MIN_HAND);
   });
 
   it('max effort spends stamina and is illegal with none left', () => {

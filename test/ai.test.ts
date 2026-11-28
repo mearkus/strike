@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cardRating, chooseBat, choosePitch, fatigueCost, solveZeroSum, staminaCost } from '../src/ai/ai';
 import { outcomeValue, situationValue } from '../src/ai/value';
+import { pitchCard } from '../src/engine/cards';
 import { isBatChoiceLegal, legalPitchChoices, newGame } from '../src/engine/game';
 import { Rng } from '../src/engine/rng';
 import type { Situation } from '../src/engine/types';
@@ -75,6 +76,26 @@ describe('AI choices', () => {
     late.inning = late.config.innings;
     expect(fatigueCost(game, 1)).toBeGreaterThan(fatigueCost(late, 1));
     expect(fatigueCost(late, 1)).toBeGreaterThan(0);
+  });
+
+  it('the Veteran pitches into the zone more against a hitter it has seen take everything', () => {
+    const zoneRate = (g: typeof game) => {
+      const rng = new Rng(11);
+      let inZone = 0;
+      for (let i = 0; i < 300; i++) {
+        const c = choosePitch(g, 1, 'veteran', rng).card;
+        const id = c === null ? 'tiredArm' : g.players[1].pitching.hand[c];
+        if (pitchCard(id).zone === 'strike') inZone++;
+      }
+      return inZone / 300;
+    };
+    const patient = structuredClone(game);
+    const sample = { pitcher: 1, batter: 0, pitchCard: 'fourSeam', maxEffort: false, landed: 'strike', batChoice: { action: 'take' }, batCard: null, outcome: { kind: 'calledStrike' }, runs: 0, text: '', result: '', situationBefore: game.sit } as const;
+    patient.history = Array.from({ length: 20 }, () => structuredClone(sample)) as typeof patient.history;
+    patient.players[1].pitching.hand = ['fourSeam', 'highHeat', 'slider', 'dirtCurve', 'curveball'];
+    const fresh = structuredClone(game);
+    fresh.players[1].pitching.hand = [...patient.players[1].pitching.hand];
+    expect(zoneRate(patient)).toBeGreaterThan(zoneRate(fresh) + 0.1);
   });
 
   it('rates premium cards above starters', () => {
