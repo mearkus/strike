@@ -28,8 +28,8 @@ export interface PitchContext {
 }
 
 export const ZONE_CONTACT: Record<Zone, number> = { strike: 0, edge: -1, chase: -3 };
-/** Taken edge pitches are called strikes on a d6 roll of this or higher (a coin flip). */
-export const EDGE_STRIKE_ROLL = 4;
+/** Taken edge pitches are called strikes on a d6 roll of this or higher (one in three). */
+export const EDGE_STRIKE_ROLL = 5;
 
 /** Swinging at a non-deceptive chase pitch: hold up on a d6 roll of this or higher. */
 export const CHECK_SWING_ROLL = 3;
@@ -51,6 +51,8 @@ export function onTargetChance(pitch: PitchCardDef): number {
 }
 
 const anyRunner = (b: Bases) => b[0] || b[1] || b[2];
+/** Extra hit quality when the batter sat on the right pitch type. */
+export const READ_QUALITY_BONUS = 1;
 export const MISS_MAX = 2; // contact <= 2: swing and miss
 export const FOUL_MAX = 6; // contact 3-6: foul; 7+: in play
 
@@ -72,7 +74,8 @@ export function swingModifiers(ctx: PitchContext, swing: SwingCardDef): { contac
   const { pitch, sit, abPitches } = ctx;
   const read = swingRead(pitch, swing);
   let contact = swing.contact + read - effectiveStuff(pitch, abPitches) + ZONE_CONTACT[pitch.zone];
-  let quality = swing.power;
+  // Guessing the pitch also squares it up: harder contact, not just more of it.
+  let quality = swing.power + (read > 0 ? READ_QUALITY_BONUS : 0);
 
   if (swing.effects.includes('protect') && sit.strikes === 2) contact += 3;
   if (swing.effects.includes('clutch') && risp(sit.bases)) {
@@ -90,7 +93,7 @@ export function swingModifiers(ctx: PitchContext, swing: SwingCardDef): { contac
 }
 
 /** Contact at least this solid turns a borderline (quality 9) ball into a single; weaker contact is caught. */
-export const SOLID_CONTACT = 8;
+export const SOLID_CONTACT = 7;
 
 /**
  * Quality (2d6 + modifiers) of a ball in play. A 9 is a single only on solid contact.

@@ -1,6 +1,6 @@
 import { FOOLED_BY, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
 import { ECONOMY, MIN_DECK_SIZE, RELEASE_COST, STAMINA, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
-import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
+import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, READ_QUALITY_BONUS, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK, STRIKES_FOR_OUT, advance } from '../engine/situation';
 import type { CardDef, DeckName, Difficulty, GameState, PlayRecord, PlayerId } from '../engine/types';
 
@@ -562,7 +562,7 @@ export function rulesHtml(): string {
     <li>Releasing a Tired Arm in the market also wins back 1 stamina (up to ${STAMINA}).</li>
   </ul>
   <h3>The read triangle</h3>
-  <p>Swing cards "sit" on a pitch type. Guess right for +3 contact; get fooled for −2. "Any" swings never gain or lose.</p>
+  <p>Swing cards "sit" on a pitch type. Guess right for +3 contact and +${READ_QUALITY_BONUS} hit quality (you square it up); get fooled for −2. "Any" swings never gain or lose.</p>
   <table class="tri"><thead><tr><th>Your swing</th><th>Crushes</th><th>Fooled by</th></tr></thead><tbody>${tri}</tbody></table>
   <h3>Running the bases</h3>
   <ul>
