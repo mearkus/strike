@@ -47,6 +47,8 @@ TypeScript, Vite (vanilla DOM, no framework), Vitest. Node 22.
   rules change, calibrate, re-run the sim, and repeat until the tables stop moving.
 - `ui/main.ts`: controller (AI turns, hot-seat privacy, localStorage autosave) and the
   single-screen table layout: score bug (top), stage with field, last pitch and at-bat
-  tracker (middle), hand dock (bottom), box score/scouting/log side panel, market overlay.
+  tracker (middle), hand dock (bottom; also shows the end-of-inning recap, which holds
+  the market and the AI until the player continues), box score/scouting/log side panel,
+  market overlay. `render()` preserves scroll positions across re-renders.
   `ui/view.ts`: pure HTML-string renderers; `ui/style.css`. On desktop and tablets the page
   must not scroll; keep new UI inside those regions.

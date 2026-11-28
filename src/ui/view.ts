@@ -310,6 +310,39 @@ export function atBatHtml(s: GameState): string {
   </div>`;
 }
 
+/** Box-score line for one half-inning, from the pitch history. */
+export function halfInningLine(s: GameState, inning: number, half: 'top' | 'bottom'): { runs: number; hits: number; walks: number; strikeouts: number } {
+  const line = { runs: 0, hits: 0, walks: 0, strikeouts: 0 };
+  for (const h of s.history) {
+    if (h.inning !== inning || h.half !== half) continue;
+    line.runs += h.runs;
+    const r = advance(h.situationBefore, h.outcome).result;
+    if (r === 'single' || r === 'double' || r === 'triple' || r === 'homeRun' || r === 'buntHit') line.hits++;
+    if (r === 'walk') line.walks++;
+    if (r === 'strikeout') line.strikeouts++;
+  }
+  return line;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Shown after the third out, before the market opens, so the last play can be seen.
+ * `s` is the state right after the out (still the half-inning that just ended).
+ */
+export function recapHtml(s: GameState): string {
+  const batting = battingTeam(s);
+  const line = halfInningLine(s, s.inning, s.half);
+  const how = s.lastPlay ? shortOutcome(s.lastPlay) : '';
+  const nextHalf = s.half === 'top' ? `the bottom of the ${ordinal(s.inning)}` : `the top of the ${ordinal(s.inning + 1)}`;
+  return `<div class="recap" role="status">
+    <h2>Three outs${how ? ` <span class="muted">· ${esc(how)}</span>` : ''}</h2>
+    <p><b>End of the ${s.half} of the ${ordinal(s.inning)}.</b> ${esc(s.players[batting].name)}: ${plural(line.runs, 'run')}, ${plural(line.hits, 'hit')}, ${plural(line.walks, 'walk')}, ${plural(line.strikeouts, 'strikeout')}.</p>
+    <p class="muted">${esc(s.players[0].name)} ${score(s, 0)}, ${esc(s.players[1].name)} ${score(s, 1)}. Next: the market, then ${nextHalf}.</p>
+    <button class="primary" data-act="nextInning">Continue to the market</button>
+  </div>`;
+}
+
 export function rolesHtml(s: GameState): string {
   if (s.phase !== 'pitch') return '';
   const b = battingTeam(s);
@@ -444,7 +477,11 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
 
 // ---------------------------------------------------------------- shop
 
-export function shopHtml(s: GameState, viewer: PlayerId, releaseDeck: DeckName): string {
+/**
+ * The market. `released` is the card released on this visit: if that was the last copy, it keeps
+ * its slot (greyed out) so the deck list doesn't reflow under the player's cursor.
+ */
+export function shopHtml(s: GameState, viewer: PlayerId, releaseDeck: DeckName, released: { deck: DeckName; id: string } | null = null): string {
   const p = s.players[viewer];
   const shop = s.shop!;
   const market = s.market.row
@@ -464,16 +501,17 @@ export function shopHtml(s: GameState, viewer: PlayerId, releaseDeck: DeckName):
   const list = deckList(pile);
   const counts = new Map<string, number>();
   for (const id of list) counts.set(id, (counts.get(id) ?? 0) + 1);
+  if (released && released.deck === releaseDeck && !counts.has(released.id)) counts.set(released.id, 0);
   const canRelease = !shop.released && p.stars >= RELEASE_COST && list.length > MIN_DECK_SIZE;
   const deckCards = [...counts]
     .sort((a, b) => card(a[0]).cost - card(b[0]).cost || a[0].localeCompare(b[0]))
     .map(([id, n]) =>
       cardHtml(id, {
         small: true,
-        act: canRelease ? 'release' : undefined,
+        act: canRelease && n > 0 ? 'release' : undefined,
         dataId: id,
-        disabled: !canRelease,
-        footer: `<div class="card-foot">×${n}${canRelease ? ` · Release ${RELEASE_COST}★` : ''}</div>`,
+        disabled: !canRelease || n === 0,
+        footer: `<div class="card-foot">${n === 0 ? 'Released' : `×${n}`}${canRelease && n > 0 ? ` · Release ${RELEASE_COST}★` : released && released.id === id && released.deck === releaseDeck && n > 0 ? ' · 1 released' : ''}</div>`,
       }),
     )
     .join('');
