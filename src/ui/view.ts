@@ -1,5 +1,5 @@
 import { FOOLED_BY, PITCH_HAND_SIZE, PITCH_TYPES, TYPE_LABEL, ZONE_LABEL, card } from '../engine/cards';
-import { ECONOMY, MIN_DECK_SIZE, RELEASE_COST, STAMINA, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
+import { ECONOMY, MIN_DECK_SIZE, RELEASE_COST, STAMINA, atBatStart, battingTeam, deckList, ordinal, pitchingTeam, score } from '../engine/game';
 import { CHECK_SWING_ROLL, EDGE_STRIKE_ROLL, MAX_EFFORT_STUFF, READ_QUALITY_BONUS, WILD_PITCH_ROLL, ZONE_CONTACT, canSteal } from '../engine/resolve';
 import { BALLS_FOR_WALK, STRIKES_FOR_OUT, advance } from '../engine/situation';
 import type { CardDef, DeckName, Difficulty, GameState, PlayRecord, PlayerId } from '../engine/types';
@@ -460,7 +460,7 @@ export function handHtml(s: GameState, viewer: PlayerId, selected: number | null
           : `<button class="effort" disabled title="Out of stamina. Throw an Easy pitch or release a Tired Arm in the market to win some back.">🔥 Out of stamina ${staminaPips(0)}</button>`
       }`;
     controls += `<div class="tools">
-      <button data-act="mound" ${s.moundVisitUsed ? 'disabled' : ''} title="Once per half-inning: throw back your hand and draw ${PITCH_HAND_SIZE} fresh cards. You still pitch after.">${s.moundVisitUsed ? 'Mound visit used' : 'Mound visit'}</button>
+      <button data-act="mound" ${s.moundVisitUsed || !atBatStart(s) ? 'disabled' : ''} title="Once per half-inning, before the first pitch of an at-bat: throw back your hand and draw ${PITCH_HAND_SIZE} fresh cards. You still pitch after.">${s.moundVisitUsed ? 'Mound visit used' : 'Mound visit'}</button>
       <button data-act="ibb" class="${confirmWalk ? 'confirm' : ''}" ${s.sit.bases[0] ? 'disabled' : ''} title="${s.sit.bases[0] ? 'Only with first base open.' : 'Put the batter on first without throwing a pitch, to set up a force or a double play.'}">${confirmWalk ? 'Confirm: walk him' : 'Intentional walk'}</button>
     </div>`;
   } else {
@@ -553,7 +553,7 @@ export function rulesHtml(): string {
     <li><b>Command:</b> every pitch rolls a d6. At or under its control it hits its spot; over, it misses one zone wider (Strike → Edge → Chase → in the dirt). A pitch in the dirt is a ball no matter what, any swing card goes back to your hand, and with runners on it may get away for a <b>wild pitch</b> (${Math.round((WILD_PITCH_ROLL / 6) * 100)}%), moving everyone up.</li>
     <li><b>Batter</b> plays a swing card, a tactic, <b>Takes</b> (no card), or <b>Hacks</b> (a weak swing with no card).</li>
     <li><b>Taking:</b> a Strike-zone pitch is a strike, a Chase pitch is a ball, an Edge pitch is the umpire's call (strike ${edgePct}% of the time).</li>
-    <li><b>Swinging:</b> roll 2d6 + contact − stuff, ${ZONE_CONTACT.edge} on the Edge, ${ZONE_CONTACT.chase} on a Chase. Low = miss, middle = foul, high = ball in play. A second 2d6 + power decides how far it goes.</li>
+    <li><b>Swinging:</b> roll 2d6 + contact − stuff, ${ZONE_CONTACT.edge} on the Edge, ${ZONE_CONTACT.chase} on a Chase. Low = miss, middle = foul, high = ball in play. A second 2d6 + power decides how far it goes: a perfect 12 leaves the yard for sluggers (power +2 or more).</li>
     <li><b>Check swing:</b> swing at a Chase pitch and ${checkPct}% of the time you hold up. It's a ball and you keep your card. Deceptive pitches don't allow it.</li>
     <li><b>${BALLS_FOR_WALK} balls</b> is a walk, <b>${STRIKES_FOR_OUT} strikes</b> is a strikeout, and two-strike fouls don't count.</li>
   </ul>
@@ -571,10 +571,11 @@ export function rulesHtml(): string {
   <h3>Running the bases</h3>
   <ul>
     <li>Singles score runners from 2nd and 3rd; doubles score everyone but the runner from 1st, who goes to 3rd.</li>
+    <li>With two outs, runners go on contact: a single takes the runner from 1st to 3rd, and a double scores him.</li>
     <li>Fly balls score a runner from 3rd with less than two outs (sac fly). Grounders move runners up but can turn two.</li>
     <li><b>Steal</b> cards send the lead runner: roll a d6 plus the card's speed (+1 on the basic Steal), +1 against Breaking or Offspeed, −1 stealing 3rd; 4 or more is safe. <b>Bunts</b> sacrifice runners over, or try for a hit. <b>Hit &amp; Run</b> sends the runner on contact.</li>
     <li>Extra innings start with a runner on 2nd.</li>
-    <li>Pitchers have two free tools: a <b>mound visit</b> (once per half-inning, throw back your hand and draw a fresh one before you pitch) and the <b>intentional walk</b> (with first base open, put the batter on first without a pitch, to set up a force or a double play).</li>
+    <li>Pitchers have two free tools: a <b>mound visit</b> (once per half-inning, before the first pitch of an at-bat: throw back your hand and draw a fresh one) and the <b>intentional walk</b> (with first base open, put the batter on first without a pitch, to set up a force or a double play).</li>
   </ul>
   <h3>Building your deck</h3>
   <ul>

@@ -3,6 +3,7 @@ import { chooseAction } from '../src/ai/ai';
 import { BAT_HAND_SIZE, PITCH_HAND_SIZE, STARTER_BATTING, STARTER_PITCHING, card } from '../src/engine/cards';
 import {
   ECONOMY,
+  atBatStart,
   IllegalAction,
   PITCHER_MIN_HAND,
   MIN_DECK_SIZE,
@@ -263,6 +264,16 @@ describe('pitcher tools and steals', () => {
     s = applyAction(s, { type: 'endShop', player: s.shop!.order[0] });
     s = applyAction(s, { type: 'endShop', player: s.shop!.order[1] });
     expect(s.moundVisitUsed).toBe(false);
+  });
+
+  it('a mound visit is only allowed before the first pitch of an at-bat', () => {
+    let s = start(9);
+    const pid = pitchingTeam(s);
+    expect(atBatStart(s)).toBe(true);
+    // Take the first pitch (a 0-0 take never ends the at-bat): now it's mid at-bat, so no visit.
+    s = pitch(s, 0, { action: 'take' });
+    expect(atBatStart(s)).toBe(false);
+    expect(() => applyAction(s, { type: 'moundVisit', player: pid })).toThrow(/before the first pitch/);
   });
 
   it('the basic Steal card runs with +1 speed', () => {

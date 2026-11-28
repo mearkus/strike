@@ -8,6 +8,7 @@ import {
   landing,
   landingDistribution,
   outcomeDistribution,
+  qualityToHit,
   resolvePitch,
   stealResult,
   throwPitch,
@@ -87,6 +88,14 @@ describe('matchups', () => {
         .filter((o) => o.outcome.kind === 'inPlay' && ['double', 'triple', 'homeRun'].includes(o.outcome.hit))
         .reduce((a, o) => a + o.p, 0);
     expect(xbh(swing('sitHeat'))).toBeGreaterThan(xbh(swing('swingAway')) * 4);
+  });
+
+  it('a 12 leaves the yard only for sluggers (power 2+)', () => {
+    expect(qualityToHit(12, 3)).toBe('homeRun');
+    expect(qualityToHit(12, 2)).toBe('homeRun');
+    expect(qualityToHit(12, 1)).toBe('double');
+    expect(qualityToHit(12, 0)).toBe('triple');
+    expect(qualityToHit(13, 0)).toBe('homeRun');
   });
 
   it('chasing is worse than swinging at strikes', () => {

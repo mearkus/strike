@@ -94,6 +94,9 @@ export function deckList(pile: Pile): string[] {
   return [...pile.draw, ...pile.hand, ...pile.discard];
 }
 
+/** No pitch thrown yet in the current at-bat. */
+export const atBatStart = (s: GameState): boolean => s.sit.balls === 0 && s.sit.strikes === 0 && s.abPitches.length === 0;
+
 export const battingTeam = (s: GameState): PlayerId => (s.half === 'top' ? 0 : 1);
 export const pitchingTeam = (s: GameState): PlayerId => (s.half === 'top' ? 1 : 0);
 export const score = (s: GameState, p: PlayerId): number => s.players[p].runsByInning.reduce((a, b) => a + b, 0);
@@ -250,6 +253,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
       if (action.player !== pitchingTeam(s)) fail('Only the pitcher can visit the mound');
       if (s.pending.pitch) fail('Pitch already chosen');
       if (s.moundVisitUsed) fail('Already visited the mound this half-inning');
+      // A fresh hand to start an at-bat, not a bail-out from a deep count.
+      if (!atBatStart(s)) fail('Mound visits only before the first pitch of an at-bat');
       const pile = s.players[action.player].pitching;
       pile.discard.push(...pile.hand);
       pile.hand = [];

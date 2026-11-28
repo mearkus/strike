@@ -52,6 +52,16 @@ describe('balls in play', () => {
     expect(r.sit.bases).toEqual([true, false, true]);
   });
 
+  it('with two outs, runners go on contact: first to third on a single, first scores on a double', () => {
+    const single = advance(sit([true, false, false], 2), play('single'));
+    expect(single.sit.bases).toEqual([true, false, true]);
+    const double = advance(sit([true, false, false], 2), play('double'));
+    expect(double.runs).toBe(1);
+    expect(double.sit.bases).toEqual([false, true, false]);
+    // With fewer than two outs, the runner on first stops at second on a single.
+    expect(advance(sit([true, false, false], 1), play('single')).sit.bases).toEqual([true, true, false]);
+  });
+
   it('double: runner on first to third', () => {
     const r = advance(sit([true, true, false]), play('double'));
     expect(r.runs).toBe(1);

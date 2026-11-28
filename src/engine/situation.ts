@@ -168,7 +168,8 @@ export function advance(before: Situation, outcome: PitchOutcome): AdvanceResult
       result = 'buntOut';
       break;
     case 'inPlay': {
-      const hnr = outcome.hitAndRun === true;
+      // Runners go on contact on a hit-and-run, and always with two outs (nothing to lose).
+      const hnr = outcome.hitAndRun === true || before.outs === 2;
       const [r1, r2, r3] = occ;
       switch (outcome.hit) {
         case 'groundout':
