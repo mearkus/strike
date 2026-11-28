@@ -304,7 +304,7 @@ function resolve(s: GameState, rng: Rng): void {
 
   const result = [landingText(base, landed), outcomeText(outcome, adv), ...notes].filter(Boolean).join(' ');
   const text = `${maxEffort ? 'MAX EFFORT ' : ''}${describePitch(pitchId)} vs ${describeBat(bat)}: ${result}`;
-  s.lastPlay = { pitcher: pid, batter: bid, pitchCard: pitchId, maxEffort, landed, batChoice: bc, batCard: batId, outcome, runs: adv.runs, text, result, situationBefore: before };
+  s.lastPlay = { pitcher: pid, batter: bid, pitchCard: pitchId, maxEffort, landed, batChoice: bc, batCard: batId, outcome, runs: adv.runs, text, result, moves: adv.moves, situationBefore: before };
   s.history.push(s.lastPlay);
   log(s, text, adv.runs);
 
